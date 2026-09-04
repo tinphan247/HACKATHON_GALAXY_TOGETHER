@@ -1,0 +1,12 @@
+{
+  "name": "galaxy-together-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "db:migrate": "node database/migrate_neon.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "pg": "^8.23.0"
+  }
+}
