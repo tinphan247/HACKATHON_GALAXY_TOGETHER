@@ -1,0 +1,2124 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Galaxy Together — Prototype</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --orange: #F58020;
+    --orange-light: #FFD2A6;
+    --navy: #0B3B60;
+    --navy-light: #E8F0F8;
+    --white: #FFFFFF;
+    --black: #000000;
+    --text-primary: #000000;
+    --text-secondary: #555555;
+    --text-muted: #888888;
+    --border: #E2E2E2;
+    --surface: #F7F8FA;
+    --sold: #C4C4C4;
+    --gold: #E5A910;
+    --star: #FDB813;
+    /* Member Colors */
+    --m1: #F58020; /* Tín = Orange (brand) */
+    --m2: #7C3AED; /* Minh = Purple */
+    --m3: #0EA5E9; /* An = Blue */
+    --m4: #10B981; /* Huy = Green */
+    --r: 8px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+    background: #EAEAEA;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 20px 0;
+  }
+
+  /* ─── PHONE SHELL ─── */
+  .phone {
+    width: 390px;
+    min-height: 844px;
+    background: var(--white);
+    border-radius: 40px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.25);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ─── SCREENS ─── */
+  .screen {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+  .screen.active { display: flex; }
+
+  /* ─── STATUS BAR ─── */
+  .status-bar {
+    background: var(--white);
+    padding: 14px 24px 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--black);
+    flex-shrink: 0;
+  }
+  .status-bar .right { display: flex; gap: 6px; align-items: center; font-size: 12px; }
+
+  /* ─── HEADER ─── */
+  .header {
+    background: var(--white);
+    padding: 10px 16px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .header-title {
+    flex: 1;
+    text-align: center;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-right: 28px;
+  }
+  .btn-back {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--white);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    flex-shrink: 0;
+  }
+  .btn-back svg { width: 18px; height: 18px; }
+
+  /* ─── SCROLLABLE BODY ─── */
+  .body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .body::-webkit-scrollbar { display: none; }
+
+  /* ─── COUNTDOWN BANNER ─── */
+  .countdown-banner {
+    background: var(--orange);
+    padding: 9px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .countdown-banner span {
+    color: var(--white);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .countdown-banner .time {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--white);
+  }
+  .countdown-banner.urgent { animation: pulse-bg 1s infinite; }
+  @keyframes pulse-bg {
+    0%,100% { background: var(--orange); }
+    50% { background: #D46810; }
+  }
+
+  /* ─── PRIMARY CTA ─── */
+  .cta-primary {
+    background: var(--orange);
+    color: var(--white);
+    border: none;
+    border-radius: var(--r);
+    padding: 14px 24px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+    transition: opacity 0.15s;
+  }
+  .cta-primary:disabled { background: var(--orange-light); }
+  .cta-primary.secondary {
+    background: var(--white);
+    color: var(--navy);
+    border: 1.5px solid var(--navy);
+  }
+
+  /* ─── BOTTOM ACTION BAR ─── */
+  .bottom-bar {
+    background: var(--white);
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+    gap: 12px;
+  }
+  .bottom-bar .info { flex: 1; }
+  .bottom-bar .info .label { font-size: 12px; color: var(--text-muted); }
+  .bottom-bar .info .value { font-size: 16px; font-weight: 700; color: var(--orange); }
+  .bottom-bar .info .sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .bottom-bar .cta-primary { width: auto; min-width: 110px; font-size: 15px; padding: 12px 20px; }
+
+  /* ─── GROUP SESSION HEADER ─── */
+  .group-ctx {
+    background: var(--navy);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .group-ctx .icon { font-size: 18px; }
+  .group-ctx .info { flex: 1; }
+  .group-ctx .name { font-size: 13px; font-weight: 700; color: var(--white); }
+  .group-ctx .meta { font-size: 11px; color: rgba(255,255,255,0.7); margin-top: 1px; }
+  .group-ctx .members { display: flex; gap: -4px; }
+
+  /* ─── MEMBER CHIPS ─── */
+  .member-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    color: var(--text-primary);
+  }
+  .member-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* ─── SECTION HEADINGS ─── */
+  .section-heading {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 16px 16px 8px;
+  }
+
+  /* ─── CARDS ─── */
+  .card {
+    background: var(--white);
+    border-radius: var(--r);
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    margin: 0 16px 10px;
+  }
+
+  /* ─── MEMBER STATUS LIST ─── */
+  .member-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .member-row:last-child { border-bottom: none; }
+  .member-avatar {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; color: var(--white);
+    flex-shrink: 0;
+  }
+  .member-info { flex: 1; }
+  .member-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .member-role { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .member-status {
+    font-size: 11px; font-weight: 600;
+    padding: 3px 8px; border-radius: 12px;
+    flex-shrink: 0;
+  }
+  .status-confirmed { background: #DCFCE7; color: #16A34A; }
+  .status-selecting { background: #FEF9C3; color: #CA8A04; }
+  .status-waiting { background: var(--surface); color: var(--text-muted); }
+  .status-pending { background: #FEE2E2; color: #DC2626; }
+
+  /* ─── SEAT MAP ─── */
+  .seat-map-container {
+    padding: 12px 16px;
+    overflow-x: auto;
+  }
+  .screen-label {
+    text-align: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 2px;
+    padding-bottom: 4px;
+  }
+  .screen-bar {
+    height: 4px;
+    background: linear-gradient(to right, transparent, var(--orange), transparent);
+    border-radius: 2px;
+    margin-bottom: 16px;
+  }
+  .seat-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: center;
+  }
+  .seat-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .row-label {
+    width: 16px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .seat {
+    width: 24px; height: 24px;
+    border-radius: 4px;
+    border: 1.5px solid #CCCCCC;
+    background: var(--white);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 7px; font-weight: 700;
+    transition: all 0.15s;
+    position: relative;
+    color: transparent;
+    flex-shrink: 0;
+  }
+  .seat.available:hover { border-color: var(--orange); background: #FFF7F0; }
+  .seat.sold { background: var(--sold); border-color: var(--sold); cursor: not-allowed; }
+  .seat.my-seat { background: var(--m1); border-color: var(--m1); color: var(--white); }
+  .seat.m2 { background: var(--m2); border-color: var(--m2); color: var(--white); }
+  .seat.m3 { background: var(--m3); border-color: var(--m3); color: var(--white); }
+  .seat.m4 { background: var(--m4); border-color: var(--m4); color: var(--white); }
+
+  /* ─── SEAT LEGEND ─── */
+  .seat-legend {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    padding: 12px 16px;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--text-secondary);
+  }
+  .legend-box {
+    width: 18px; height: 18px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  /* ─── GROUP SEAT SUMMARY ─── */
+  .group-seat-summary {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 10px 16px;
+    flex-shrink: 0;
+  }
+  .group-seat-summary .title { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .gss-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+  .gss-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .gss-name { font-size: 12px; font-weight: 600; color: var(--text-primary); width: 40px; flex-shrink: 0; }
+  .gss-seats { font-size: 12px; color: var(--text-secondary); flex: 1; }
+  .gss-icon { font-size: 11px; }
+
+  /* ─── F&B CARDS ─── */
+  .fnb-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 12px;
+    margin: 0 16px 10px;
+  }
+  .fnb-img {
+    width: 70px; height: 70px;
+    border-radius: 8px;
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    flex-shrink: 0;
+  }
+  .fnb-info { flex: 1; }
+  .fnb-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+  .fnb-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
+  .fnb-price { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-top: 4px; }
+  .stepper {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 8px;
+  }
+  .stepper-btn {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: var(--white);
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--navy);
+    transition: all 0.15s;
+  }
+  .stepper-btn:hover { border-color: var(--orange); color: var(--orange); }
+  .stepper-count { font-size: 15px; font-weight: 700; color: var(--text-primary); min-width: 20px; text-align: center; }
+
+  /* ─── PAYMENT CARD ─── */
+  .payment-member-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .payment-member-row:last-child { border-bottom: none; }
+  .payment-status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .dot-paid { background: #16A34A; }
+  .dot-pending { background: #CA8A04; }
+  .dot-failed { background: #DC2626; }
+  .payment-amount { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+  .payment-label { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+  /* ─── PROGRESS BAR ─── */
+  .progress-bar-wrap { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 8px 0; }
+  .progress-bar-fill { height: 100%; background: var(--orange); border-radius: 4px; transition: width 0.6s ease; }
+
+  /* ─── QR AREA ─── */
+  .qr-box {
+    width: 160px; height: 160px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto;
+    position: relative;
+    overflow: hidden;
+  }
+  .qr-inner {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+    padding: 12px;
+    width: 100%; height: 100%;
+  }
+  .qr-cell { border-radius: 1px; background: var(--black); }
+  .qr-cell.empty { background: transparent; }
+
+  /* ─── INVITE CODE ─── */
+  .invite-code {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 6px;
+    color: var(--navy);
+    text-align: center;
+    padding: 12px;
+    background: var(--navy-light);
+    border-radius: var(--r);
+    margin: 12px 16px;
+    font-family: 'Courier New', monospace;
+  }
+
+  /* ─── COPY ROW ─── */
+  .copy-row {
+    display: flex; gap: 8px;
+    padding: 0 16px 12px;
+  }
+  .copy-row button {
+    flex: 1; padding: 12px;
+    border-radius: var(--r);
+    border: 1.5px solid var(--navy);
+    background: var(--white);
+    color: var(--navy);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .copy-row button.filled { background: var(--navy); color: var(--white); }
+
+  /* ─── MOVIE INFO CARD ─── */
+  .movie-info-card {
+    background: var(--surface);
+    border-radius: var(--r);
+    padding: 14px 16px;
+    margin: 12px 16px;
+    border-left: 4px solid var(--orange);
+  }
+  .movie-info-card .title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+  .movie-info-card .meta { font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.6; }
+
+  /* ─── INPUT ─── */
+  .form-group { padding: 0 16px 12px; }
+  .form-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block; }
+  .form-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--r);
+    font-size: 15px;
+    color: var(--text-primary);
+    background: var(--white);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus { border-color: var(--orange); }
+
+  /* ─── COUNTER ROW ─── */
+  .counter-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--r);
+    margin: 0 16px 12px;
+  }
+  .counter-row .label { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+  .counter-row .stepper { margin: 0; }
+
+  /* ─── RADIO GROUP ─── */
+  .radio-group { padding: 0 16px 16px; }
+  .radio-option {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--r);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .radio-option.selected { border-color: var(--orange); background: #FFF7F0; }
+  .radio-dot {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    margin-top: 1px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .radio-dot.selected { border-color: var(--orange); }
+  .radio-dot.selected::after { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--orange); display: block; }
+  .radio-text .title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .radio-text .desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ─── SUCCESS SCREEN ─── */
+  .success-icon {
+    font-size: 64px;
+    text-align: center;
+    padding: 24px 0 8px;
+  }
+  .success-title {
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+    color: var(--text-primary);
+  }
+  .success-sub {
+    font-size: 14px;
+    text-align: center;
+    color: var(--text-muted);
+    margin-top: 6px;
+    padding: 0 32px;
+    line-height: 1.6;
+  }
+
+  /* ─── E-TICKET ─── */
+  .ticket {
+    background: var(--white);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    margin: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  }
+  .ticket-header {
+    background: var(--navy);
+    padding: 20px 20px 16px;
+  }
+  .ticket-header .movie { font-size: 18px; font-weight: 700; color: var(--white); }
+  .ticket-header .cinema { font-size: 13px; color: rgba(255,255,255,0.75); margin-top: 4px; }
+  .ticket-body { padding: 16px 20px; }
+  .ticket-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .ticket-row:last-child { border-bottom: none; }
+  .ticket-label { font-size: 12px; color: var(--text-muted); }
+  .ticket-value { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+  .ticket-divider { height: 1px; background: repeating-linear-gradient(to right, var(--border) 0, var(--border) 8px, transparent 8px, transparent 14px); margin: 0 -0px; }
+  .ticket-qr { padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .ticket-qr .code { font-size: 11px; color: var(--text-muted); letter-spacing: 1px; font-family: monospace; }
+
+  /* ─── SHOWTIME SCREEN EXTRAS ─── */
+  .showtime-movie-header {
+    background: var(--navy);
+    padding: 20px 16px 16px;
+    flex-shrink: 0;
+  }
+  .showtime-movie-header .poster-row { display: flex; gap: 14px; align-items: flex-start; }
+  .poster-placeholder {
+    width: 70px; height: 100px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #1a3a5c, #0B3B60);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    flex-shrink: 0;
+  }
+  .movie-meta .title { font-size: 18px; font-weight: 700; color: var(--white); }
+  .movie-meta .badge-row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--white);
+  }
+  .badge-age { background: var(--orange); }
+  .badge-format { background: rgba(255,255,255,0.2); }
+  .movie-meta .rating { color: var(--star); font-size: 13px; font-weight: 600; margin-top: 6px; }
+  .movie-meta .genre { font-size: 12px; color: rgba(255,255,255,0.65); margin-top: 3px; }
+
+  /* ─── DATE STRIP ─── */
+  .date-strip { display: flex; gap: 8px; padding: 12px 16px; overflow-x: auto; flex-shrink: 0; }
+  .date-strip::-webkit-scrollbar { display: none; }
+  .date-card {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    border-radius: var(--r);
+    text-align: center;
+    cursor: pointer;
+  }
+  .date-card.active { background: var(--navy); }
+  .date-card .day { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+  .date-card.active .day { color: rgba(255,255,255,0.8); }
+  .date-card .num { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+  .date-card.active .num { color: var(--white); }
+
+  /* ─── CINEMA ACCORDION ─── */
+  .cinema-item { border-bottom: 1px solid var(--border); }
+  .cinema-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px;
+    cursor: pointer;
+  }
+  .cinema-name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+  .cinema-km { font-size: 13px; color: var(--navy); font-weight: 500; }
+  .cinema-content { padding: 0 16px 14px; display: none; }
+  .cinema-content.open { display: block; }
+  .format-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+  .showtime-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+  .showtime-btn {
+    padding: 10px 0;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    background: var(--white);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .showtime-btn:hover { border-color: var(--orange); color: var(--orange); }
+  .showtime-btn.selected { border-color: var(--orange); background: var(--orange); color: var(--white); }
+
+  /* ─── SELECT SESSION CTA ─── */
+  .session-cta-row {
+    padding: 0 16px 14px;
+    display: flex;
+    gap: 8px;
+  }
+  .cta-group {
+    flex: 1;
+    padding: 12px;
+    border-radius: var(--r);
+    border: none;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .cta-solo { background: var(--navy-light); color: var(--navy); }
+  .cta-together { background: var(--orange); color: var(--white); display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+  /* ─── WAITING ANIMATION ─── */
+  .pulse {
+    display: inline-block;
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ─── TOAST ─── */
+  .toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1a1a1a;
+    color: var(--white);
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 999;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ─── SIM BUTTONS ─── */
+  .sim-bar {
+    background: #1a1a1a;
+    padding: 8px 12px;
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+  .sim-bar::-webkit-scrollbar { display: none; }
+  .sim-btn {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border-radius: 12px;
+    border: none;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    background: #333;
+    color: #CCC;
+  }
+  .sim-btn.active { background: var(--orange); color: var(--white); }
+
+  /* ─── AISLE ─── */
+  .aisle { height: 8px; }
+
+  /* ─── NOTIFICATION DOT ─── */
+  .notif {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--navy-light);
+    border: 1px solid rgba(11,59,96,0.2);
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--navy);
+  }
+
+  /* ─── REALTIME ACTIVITY TICKER ─── */
+  .activity-ticker {
+    background: #F0F7FF;
+    border-left: 3px solid var(--navy);
+    padding: 8px 12px;
+    margin: 8px 16px;
+    border-radius: 0 8px 8px 0;
+    font-size: 12px;
+    color: var(--navy);
+    font-weight: 500;
+    display: none;
+  }
+  .activity-ticker.visible { display: block; }
+
+  /* ─── DIVIDER ─── */
+  .divider { height: 8px; background: var(--surface); flex-shrink: 0; }
+
+  /* ─── PAYMENT BTN ─── */
+  .pay-btn {
+    background: var(--orange);
+    color: var(--white);
+    border: none;
+    border-radius: var(--r);
+    padding: 11px 20px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .pay-btn.paid { background: #DCFCE7; color: #16A34A; cursor: default; }
+
+  /* ─── SCREEN: HOME ─── */
+  .home-hero {
+    background: linear-gradient(135deg, var(--navy), #1a5a8a);
+    padding: 20px 16px;
+    color: var(--white);
+  }
+  .home-hero .greeting { font-size: 13px; opacity: 0.75; }
+  .home-hero .tagline { font-size: 22px; font-weight: 700; margin-top: 4px; line-height: 1.3; }
+  .home-hero .sub { font-size: 13px; opacity: 0.8; margin-top: 6px; }
+  .together-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--orange);
+    color: var(--white);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 10px;
+  }
+  .movie-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }
+  .movie-card { cursor: pointer; }
+  .movie-poster {
+    aspect-ratio: 2/3;
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px;
+  }
+  .movie-poster .overlay {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+    padding: 20px 6px 6px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+  }
+  .movie-poster .age-badge {
+    background: var(--orange);
+    color: var(--white);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 3px;
+  }
+  .movie-poster .rating { color: var(--star); font-size: 11px; font-weight: 700; }
+  .movie-card .movie-title { font-size: 13px; font-weight: 600; margin-top: 6px; color: var(--text-primary); }
+
+  /* ─── OVERFLOW ─── */
+  .screen.active .body { padding-bottom: 0; }
+
+  /* ─── TOGETHER CTA STRIP ─── */
+  .together-strip {
+    background: linear-gradient(135deg, #FFF7F0, #FFE8D0);
+    border: 1.5px solid var(--orange);
+    border-radius: var(--r);
+    margin: 12px 16px;
+    padding: 14px;
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .together-strip:hover { transform: scale(1.01); }
+  .together-strip .ts-label { font-size: 11px; font-weight: 700; color: var(--orange); text-transform: uppercase; letter-spacing: 0.5px; }
+  .together-strip .ts-title { font-size: 16px; font-weight: 700; color: var(--text-primary); margin-top: 3px; }
+  .together-strip .ts-desc { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+  .together-strip .ts-cta { margin-top: 10px; display: inline-block; background: var(--orange); color: var(--white); font-size: 13px; font-weight: 700; padding: 8px 16px; border-radius: 6px; }
+</style>
+</head>
+<body>
+
+<div class="phone" id="app">
+  <div class="toast" id="toast"></div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 0: HOME
+  ═══════════════════════════════════════════ -->
+  <div class="screen active" id="screen-home">
+    <div class="status-bar">
+      <span>19:12</span>
+      <div class="right"><span>5G</span><span>📶</span><span>🔋23</span></div>
+    </div>
+    <div class="body">
+      <div class="home-hero">
+        <div class="greeting">Chào buổi tối 👋</div>
+        <div class="tagline">Phim gì hôm nay?</div>
+        <div class="sub">Đặt vé cho nhóm, không cần lo thu tiền</div>
+        <div class="together-badge">✨ Mới: Galaxy Together</div>
+      </div>
+
+      <!-- Category tabs -->
+      <div style="display:flex;gap:0;padding:0 16px;border-bottom:1px solid var(--border);margin-top:2px;">
+        <div style="padding:12px 0;margin-right:20px;font-size:15px;font-weight:700;color:var(--navy);border-bottom:3px solid var(--navy);">Đang chiếu</div>
+        <div style="padding:12px 0;font-size:15px;font-weight:500;color:var(--text-muted);">Sắp chiếu</div>
+      </div>
+
+      <!-- Together strip -->
+      <div class="together-strip" onclick="goTo('screen-showtimes')">
+        <div class="ts-label">🎬 Galaxy Together</div>
+        <div class="ts-title">Đặt vé nhóm cùng nhau</div>
+        <div class="ts-desc">Mỗi người chọn ghế, chọn combo và tự thanh toán — không ai phải ứng tiền</div>
+        <div class="ts-cta">Thử ngay →</div>
+      </div>
+
+      <!-- Movies -->
+      <div class="movie-grid">
+        <div class="movie-card" onclick="goTo('screen-showtimes')">
+          <div class="movie-poster" style="background:linear-gradient(135deg,#1a3a5c,#2d6a9f);">
+            🎬
+            <div class="overlay">
+              <span class="age-badge">K</span>
+              <span class="rating">★ 8.4</span>
+            </div>
+          </div>
+          <div class="movie-title">Quý Tử Vượt Giàu</div>
+        </div>
+        <div class="movie-card" onclick="goTo('screen-showtimes')">
+          <div class="movie-poster" style="background:linear-gradient(135deg,#5a1a3c,#9f2d6a);">
+            🌟
+            <div class="overlay">
+              <span class="age-badge">T16</span>
+              <span class="rating">★ 9.7</span>
+            </div>
+          </div>
+          <div class="movie-title">Hope Vùng Tử Địa</div>
+        </div>
+        <div class="movie-card" onclick="goTo('screen-showtimes')">
+          <div class="movie-poster" style="background:linear-gradient(135deg,#1a5c3a,#2d9f6a);">
+            🐠
+            <div class="overlay">
+              <span class="age-badge">K</span>
+              <span class="rating">★ 9.0</span>
+            </div>
+          </div>
+          <div class="movie-title">Chiikawa: Bí Mật Đảo</div>
+        </div>
+        <div class="movie-card">
+          <div class="movie-poster" style="background:linear-gradient(135deg,#3c3c1a,#6a6a2d);">
+            🦸
+            <div class="overlay">
+              <span class="age-badge">T13</span>
+              <span class="rating">★ 8.2</span>
+            </div>
+          </div>
+          <div class="movie-title">Hộ Linh Tráng Sĩ</div>
+        </div>
+      </div>
+    </div>
+    <!-- Bottom nav -->
+    <div style="background:var(--white);border-top:1px solid var(--border);display:flex;padding:8px 0 16px;">
+      <div style="flex:1;text-align:center;font-size:10px;font-weight:700;color:var(--navy);">🏠<br>Trang chủ</div>
+      <div style="flex:1;text-align:center;font-size:10px;color:var(--text-muted);">🎭<br>Rạp phim</div>
+      <div style="flex:1;text-align:center;font-size:10px;color:var(--text-muted);">🏷️<br>CineTag#</div>
+      <div style="flex:1;text-align:center;font-size:10px;color:var(--text-muted);">🎞️<br>Điện ảnh</div>
+      <div style="flex:1;text-align:center;font-size:10px;color:var(--text-muted);">👤<br>Tài khoản</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 1: SHOWTIME SELECTION
+  ═══════════════════════════════════════════ -->
+  <div class="screen" id="screen-showtimes">
+    <div class="status-bar">
+      <span>19:12</span>
+      <div class="right"><span>5G</span><span>📶</span></div>
+    </div>
+    <div class="header">
+      <div class="btn-back" onclick="goTo('screen-home')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0B3B60" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>
+      <div class="header-title">Quý Tử Vượt Giàu</div>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B3B60" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+    </div>
+
+    <!-- Tab bar -->
+    <div style="display:flex;border-bottom:1px solid var(--border);padding:0 16px;flex-shrink:0;">
+      <div style="padding:11px 0;margin-right:20px;font-size:14px;font-weight:700;color:var(--navy);border-bottom:3px solid var(--navy);">Suất Chiếu</div>
+      <div style="padding:11px 0;margin-right:20px;font-size:14px;color:var(--text-muted);">Thông Tin</div>
+      <div style="padding:11px 0;font-size:14px;color:var(--text-muted);">Tin Tức</div>
+    </div>
+
+    <!-- Filter row -->
+    <div style="display:flex;gap:10px;padding:12px 16px;flex-shrink:0;">
+      <div style="flex:1;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;color:var(--text-primary);display:flex;justify-content:space-between;align-items:center;">TP Hồ Chí Minh <span style="color:var(--text-muted);">▾</span></div>
+      <div style="flex:1;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;">Cinema <span>▾</span></div>
+    </div>
+
+    <!-- Date strip -->
+    <div class="date-strip">
+      <div class="date-card active"><div class="day">Thứ Hai</div><div class="num">07/09</div></div>
+      <div class="date-card"><div class="day">Thứ Ba</div><div class="num">08/09</div></div>
+      <div class="date-card"><div class="day">Thứ Tư</div><div class="num">09/09</div></div>
+      <div class="date-card"><div class="day">Thứ Năm</div><div class="num">10/09</div></div>
+      <div class="date-card"><div class="day">Thứ Sáu</div><div class="num">11/09</div></div>
+    </div>
+    <div style="text-align:center;font-size:12px;color:var(--text-muted);padding-bottom:8px;flex-shrink:0;">Thứ Hai 07, tháng 9 2026</div>
+
+    <div class="body">
+      <!-- Cinema accordion -->
+      <div class="cinema-item">
+        <div class="cinema-header" onclick="toggleAccordion('cinema1')">
+          <div>
+            <div class="cinema-name">Galaxy Cinema Nguyễn Văn Quá</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="cinema-km">📍 2.2 km</span>
+            <span id="cinema1-arrow">^</span>
+          </div>
+        </div>
+        <div class="cinema-content open" id="cinema1">
+          <div class="format-label">2D PHỤ ĐỀ</div>
+          <div class="showtime-grid">
+            <div class="showtime-btn" onclick="selectShowtime(this,'09:00')">09:00</div>
+            <div class="showtime-btn" onclick="selectShowtime(this,'10:45')">10:45</div>
+            <div class="showtime-btn" onclick="selectShowtime(this,'12:00')">12:00</div>
+            <div class="showtime-btn" onclick="selectShowtime(this,'13:00')">13:00</div>
+            <div class="showtime-btn" onclick="selectShowtime(this,'14:15')">14:15</div>
+            <div class="showtime-btn" onclick="selectShowtime(this,'15:15')">15:15</div>
+            <div class="showtime-btn" onclick="selectShowtime(this,'17:30')">17:30</div>
+            <div class="showtime-btn" onclick="selectShowtime(this,'18:45')">18:45</div>
+            <div class="showtime-btn" onclick="selectShowtime(this,'19:45')">19:45</div>
+            <div class="showtime-btn" onclick="selectShowtime(this,'20:15')">20:15</div>
+            <div class="showtime-btn selected" onclick="selectShowtime(this,'21:00')">21:00</div>
+            <div class="showtime-btn" onclick="selectShowtime(this,'22:00')">22:00</div>
+          </div>
+          <!-- Galaxy Together CTA -->
+          <div style="background:linear-gradient(135deg,#FFF7F0,#FFE8D0);border:1.5px solid var(--orange);border-radius:var(--r);padding:12px;margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:6px;">🎬 GALAXY TOGETHER</div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-bottom:10px;">Suất 21:00 • Bạn có muốn đi cùng nhóm?</div>
+            <div class="session-cta-row" style="padding:0;">
+              <button class="cta-group cta-solo" onclick="goTo('screen-seats')">Đặt một mình</button>
+              <button class="cta-group cta-together" onclick="goTo('screen-create-group')">
+                👥 Tạo nhóm xem phim
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cinema-item">
+        <div class="cinema-header" onclick="toggleAccordion('cinema2')">
+          <div class="cinema-name">Galaxy Cinema Kinh Dương Vương</div>
+          <div style="display:flex;align-items:center;gap:8px;"><span class="cinema-km">📍 3.5 km</span><span id="cinema2-arrow">v</span></div>
+        </div>
+        <div class="cinema-content" id="cinema2"></div>
+      </div>
+      <div class="cinema-item">
+        <div class="cinema-header">
+          <div class="cinema-name">Galaxy Cinema Tân Bình</div>
+          <div style="display:flex;align-items:center;gap:8px;"><span class="cinema-km">📍 4.5 km</span><span>v</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 2: CREATE GROUP
+  ═══════════════════════════════════════════ -->
+  <div class="screen" id="screen-create-group">
+    <div class="status-bar"><span>19:13</span><div class="right"><span>5G</span><span>📶</span></div></div>
+    <div class="header">
+      <div class="btn-back" onclick="goTo('screen-showtimes')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0B3B60" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>
+      <div class="header-title">Tạo nhóm xem phim</div>
+      <div style="width:36px;"></div>
+    </div>
+
+    <div class="body">
+      <!-- Movie info -->
+      <div class="movie-info-card">
+        <div class="title">Quý Tử Vượt Giàu</div>
+        <div class="meta">
+          Galaxy Cinema Nguyễn Văn Quá<br>
+          Thứ Hai, 07/09 • 21:00<br>
+          2D PHỤ ĐỀ
+        </div>
+      </div>
+
+      <div class="section-heading" style="padding-top:4px;">Thông tin nhóm</div>
+
+      <div class="form-group">
+        <label class="form-label">Tên nhóm</label>
+        <input class="form-input" type="text" value="Friday Movie Night" id="group-name-input">
+      </div>
+
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);padding:0 16px 8px;">Số thành viên dự kiến</div>
+      <div class="counter-row">
+        <div class="label" id="member-count-label">4 người</div>
+        <div class="stepper">
+          <button class="stepper-btn" onclick="changeMemberCount(-1)">−</button>
+          <span class="stepper-count" id="member-count">4</span>
+          <button class="stepper-btn" onclick="changeMemberCount(1)">+</button>
+        </div>
+      </div>
+
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);padding:4px 16px 8px;">Thanh toán</div>
+      <div class="radio-group">
+        <div class="radio-option selected" id="pay-split" onclick="selectPayMode('split')">
+          <div class="radio-dot selected" id="dot-split"></div>
+          <div class="radio-text">
+            <div class="title">Mỗi người tự thanh toán</div>
+            <div class="desc">Mỗi thành viên tự thanh toán phần ghế và combo của mình</div>
+          </div>
+        </div>
+        <div class="radio-option" id="pay-org" onclick="selectPayMode('org')">
+          <div class="radio-dot" id="dot-org"></div>
+          <div class="radio-text">
+            <div class="title">Người tạo nhóm thanh toán tất cả</div>
+            <div class="desc">Một người thanh toán, các thành viên chuyển khoản riêng</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:12px 16px 20px;">
+      <button class="cta-primary" onclick="goTo('screen-invite')">🎬 Tạo nhóm</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 3: INVITE / GROUP CREATED
+  ═══════════════════════════════════════════ -->
+  <div class="screen" id="screen-invite">
+    <div class="status-bar"><span>19:13</span><div class="right"><span>5G</span><span>📶</span></div></div>
+    <div class="header">
+      <div class="btn-back" onclick="goTo('screen-create-group')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0B3B60" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>
+      <div class="header-title">Mời bạn bè</div>
+      <div style="width:36px;"></div>
+    </div>
+
+    <div class="body">
+      <!-- Created banner -->
+      <div style="text-align:center;padding:20px 16px 16px;">
+        <div style="font-size:40px;margin-bottom:8px;">🎉</div>
+        <div style="font-size:20px;font-weight:700;color:var(--text-primary);">Nhóm đã được tạo!</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px;">Mời bạn bè tham gia qua QR hoặc mã nhóm</div>
+      </div>
+
+      <!-- Movie summary -->
+      <div class="movie-info-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="title">Friday Movie Night</div>
+            <div class="meta">4 người • 21:00 • Galaxy Nguyễn Văn Quá</div>
+          </div>
+          <span class="badge badge-age" style="font-size:10px;white-space:nowrap;">Tự thanh toán</span>
+        </div>
+      </div>
+
+      <!-- QR -->
+      <div style="text-align:center;padding:8px 16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-muted);margin-bottom:12px;">Quét QR để tham gia</div>
+        <div class="qr-box">
+          <!-- Simplified QR pattern -->
+          <div style="padding:10px;display:flex;flex-direction:column;gap:3px;">
+            <div style="display:flex;gap:3px;">
+              <div style="width:40px;height:40px;border:4px solid #000;border-radius:4px;display:flex;align-items:center;justify-content:center;"><div style="width:20px;height:20px;background:#000;border-radius:2px;"></div></div>
+              <div style="display:flex;flex-direction:column;gap:3px;flex:1;padding:4px 6px;">
+                <div style="height:6px;background:#000;border-radius:1px;width:80%;"></div>
+                <div style="height:6px;background:#000;border-radius:1px;width:50%;"></div>
+                <div style="height:6px;background:#000;border-radius:1px;width:70%;"></div>
+                <div style="height:6px;background:#000;border-radius:1px;width:40%;"></div>
+              </div>
+              <div style="width:40px;height:40px;border:4px solid #000;border-radius:4px;display:flex;align-items:center;justify-content:center;"><div style="width:20px;height:20px;background:#000;border-radius:2px;"></div></div>
+            </div>
+            <div style="display:flex;gap:4px;padding:6px 2px;">
+              <div style="flex:1;height:5px;background:#000;border-radius:1px;"></div>
+              <div style="flex:1;height:5px;background:#000;border-radius:1px;opacity:0.4;"></div>
+              <div style="flex:1;height:5px;background:#000;border-radius:1px;"></div>
+              <div style="flex:1;height:5px;background:#000;border-radius:1px;opacity:0.6;"></div>
+            </div>
+            <div style="display:flex;gap:3px;align-items:flex-end;">
+              <div style="width:40px;height:40px;border:4px solid #000;border-radius:4px;display:flex;align-items:center;justify-content:center;"><div style="width:20px;height:20px;background:#000;border-radius:2px;"></div></div>
+              <div style="display:flex;flex-direction:column;gap:3px;flex:1;padding:4px 6px;">
+                <div style="height:6px;background:#000;border-radius:1px;width:60%;"></div>
+                <div style="height:6px;background:#000;border-radius:1px;width:90%;"></div>
+                <div style="height:6px;background:#000;border-radius:1px;width:45%;"></div>
+              </div>
+              <div style="width:20px;height:20px;background:#000;border-radius:3px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Invite code -->
+      <div class="invite-code">GTH-471</div>
+
+      <!-- Copy / Share -->
+      <div class="copy-row">
+        <button onclick="showToast('Đã sao chép link!')">🔗 Sao chép link</button>
+        <button class="filled" onclick="showToast('Đang mở chia sẻ...')">↗ Chia sẻ</button>
+      </div>
+
+      <!-- Member preview -->
+      <div class="section-heading">Thành viên (1/4)</div>
+      <div style="padding:0 16px 12px;">
+        <div class="member-row">
+          <div class="member-avatar" style="background:var(--m1);">T</div>
+          <div class="member-info">
+            <div class="member-name">Tín</div>
+            <div class="member-role">Người tạo nhóm</div>
+          </div>
+          <span class="member-status status-confirmed">Đã tham gia</span>
+        </div>
+        <div class="member-row" style="opacity:0.5;">
+          <div style="width:38px;height:38px;border-radius:50%;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-muted);">+</div>
+          <div class="member-info"><div class="member-name" style="color:var(--text-muted);">Chờ tham gia...</div></div>
+          <span class="pulse">◌</span>
+        </div>
+        <div class="member-row" style="opacity:0.5;">
+          <div style="width:38px;height:38px;border-radius:50%;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-muted);">+</div>
+          <div class="member-info"><div class="member-name" style="color:var(--text-muted);">Chờ tham gia...</div></div>
+          <span class="pulse">◌</span>
+        </div>
+        <div class="member-row" style="opacity:0.5;">
+          <div style="width:38px;height:38px;border-radius:50%;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-muted);">+</div>
+          <div class="member-info"><div class="member-name" style="color:var(--text-muted);">Chờ tham gia...</div></div>
+          <span class="pulse">◌</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:12px 16px 20px;">
+      <button class="cta-primary" onclick="goTo('screen-lobby')">Vào phòng chờ →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 4: GROUP LOBBY / SESSION
+  ═══════════════════════════════════════════ -->
+  <div class="screen" id="screen-lobby">
+    <div class="status-bar"><span>19:14</span><div class="right"><span>5G</span><span>📶</span></div></div>
+    <div class="header">
+      <div class="btn-back" onclick="goTo('screen-invite')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0B3B60" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>
+      <div class="header-title">Friday Movie Night</div>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B3B60" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+    </div>
+
+    <!-- Group context bar -->
+    <div class="group-ctx">
+      <div class="icon">🎬</div>
+      <div class="info">
+        <div class="name">Friday Movie Night • Mã: GTH-471</div>
+        <div class="meta">Quý Tử Vượt Giàu • 21:00 • Galaxy Nguyễn Văn Quá</div>
+      </div>
+    </div>
+
+    <!-- Realtime activity -->
+    <div class="activity-ticker visible" id="lobby-ticker">
+      📡 Minh vừa tham gia nhóm!
+    </div>
+
+    <!-- Sim bar -->
+    <div class="sim-bar">
+      <span style="font-size:11px;color:#888;flex-shrink:0;line-height:28px;">🎮 Mô phỏng:</span>
+      <button class="sim-btn active" onclick="simLobbyStep('all-joined')">Cả nhóm tham gia</button>
+      <button class="sim-btn" onclick="goTo('screen-seats')">→ Vào chọn ghế</button>
+    </div>
+
+    <div class="body">
+      <div class="section-heading">Thành viên nhóm (2/4)</div>
+      <div style="padding:0 16px;">
+        <div class="member-row">
+          <div class="member-avatar" style="background:var(--m1);">T</div>
+          <div class="member-info">
+            <div class="member-name">Tín</div>
+            <div class="member-role">Người tạo nhóm</div>
+          </div>
+          <span class="member-status status-confirmed">Đã tham gia</span>
+        </div>
+        <div class="member-row" id="lobby-minh">
+          <div class="member-avatar" style="background:var(--m2);">M</div>
+          <div class="member-info">
+            <div class="member-name">Minh</div>
+          </div>
+          <span class="member-status status-confirmed">Đã tham gia</span>
+        </div>
+        <div class="member-row" id="lobby-an">
+          <div style="width:38px;height:38px;border-radius:50%;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-muted);">+</div>
+          <div class="member-info"><div class="member-name" style="color:var(--text-muted);">Chờ tham gia... <span class="pulse">◌</span></div></div>
+          <span style="font-size:20px;color:var(--text-muted);">◌</span>
+        </div>
+        <div class="member-row" id="lobby-huy">
+          <div style="width:38px;height:38px;border-radius:50%;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-muted);">+</div>
+          <div class="member-info"><div class="member-name" style="color:var(--text-muted);">Chờ tham gia... <span class="pulse">◌</span></div></div>
+          <span style="font-size:20px;color:var(--text-muted);">◌</span>
+        </div>
+      </div>
+
+      <div class="divider" style="margin-top:8px;"></div>
+
+      <div class="section-heading">Thông tin phiên</div>
+      <div style="padding:0 16px 12px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="card" style="margin:0;padding:10px 12px;">
+            <div style="font-size:11px;color:var(--text-muted);">Phim</div>
+            <div style="font-size:13px;font-weight:600;margin-top:2px;">Quý Tử Vượt Giàu</div>
+          </div>
+          <div class="card" style="margin:0;padding:10px 12px;">
+            <div style="font-size:11px;color:var(--text-muted);">Suất chiếu</div>
+            <div style="font-size:13px;font-weight:600;margin-top:2px;">21:00 • 07/09</div>
+          </div>
+          <div class="card" style="margin:0;padding:10px 12px;">
+            <div style="font-size:11px;color:var(--text-muted);">Thanh toán</div>
+            <div style="font-size:13px;font-weight:600;margin-top:2px;">Tự thanh toán</div>
+          </div>
+          <div class="card" style="margin:0;padding:10px 12px;">
+            <div style="font-size:11px;color:var(--text-muted);">Thành viên</div>
+            <div style="font-size:18px;font-weight:700;color:var(--orange);">2 / 4</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:12px 16px 20px;">
+      <button class="cta-primary" onclick="goTo('screen-seats')">Chọn ghế →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 5: REALTIME SEAT MAP
+  ═══════════════════════════════════════════ -->
+  <div class="screen" id="screen-seats">
+    <div class="status-bar"><span>19:16</span><div class="right"><span>5G</span><span>📶</span></div></div>
+    <div class="header" style="padding:8px 16px 8px;">
+      <div class="btn-back" onclick="goTo('screen-lobby')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0B3B60" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:15px;font-weight:700;text-align:center;">Galaxy Nguyễn Văn Quá</div>
+        <div style="font-size:11px;text-align:center;color:var(--text-muted);">Quý Tử Vượt Giàu • 2D PHỤ ĐỀ <span class="badge badge-age" style="font-size:9px;">K</span></div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;font-weight:600;">21:00 ▾</div>
+    </div>
+
+    <!-- Countdown -->
+    <div class="countdown-banner" id="countdown-bar">
+      <span>⏱</span>
+      <span>Thời gian giữ ghế:</span>
+      <span class="time" id="countdown-time">08:00</span>
+    </div>
+
+    <!-- Group context -->
+    <div class="group-ctx" style="padding:7px 16px;">
+      <div class="icon" style="font-size:14px;">🎬</div>
+      <div class="info">
+        <div class="name" style="font-size:12px;">Friday Movie Night</div>
+      </div>
+      <div style="display:flex;gap:4px;">
+        <div style="width:22px;height:22px;border-radius:50%;background:var(--m1);border:2px solid var(--white);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--white);">T</div>
+        <div style="width:22px;height:22px;border-radius:50%;background:var(--m2);border:2px solid var(--white);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--white);">M</div>
+        <div style="width:22px;height:22px;border-radius:50%;background:var(--m3);border:2px solid var(--white);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--white);">A</div>
+        <div style="width:22px;height:22px;border-radius:50%;background:var(--m4);border:2px solid var(--white);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--white);">H</div>
+      </div>
+    </div>
+
+    <!-- Activity ticker -->
+    <div class="activity-ticker" id="seat-ticker"></div>
+
+    <!-- Sim bar -->
+    <div class="sim-bar">
+      <span style="font-size:11px;color:#888;flex-shrink:0;line-height:28px;">🎮 Mô phỏng:</span>
+      <button class="sim-btn" onclick="simSeatStep('minh')">Minh chọn G10</button>
+      <button class="sim-btn" onclick="simSeatStep('an')">An chọn G11</button>
+      <button class="sim-btn" onclick="simSeatStep('huy')">Huy chọn G12</button>
+    </div>
+
+    <div class="body">
+      <!-- Seat map -->
+      <div class="seat-map-container">
+        <div class="screen-label">MÀN HÌNH</div>
+        <div class="screen-bar"></div>
+        <div class="seat-grid" id="seat-grid">
+          <!-- rows will be rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Seat legend -->
+      <div class="seat-legend">
+        <div class="legend-item"><div class="legend-box" style="border:1.5px solid #CCC;"></div>Ghế đơn</div>
+        <div class="legend-item"><div class="legend-box" style="border:1.5px solid var(--gold);"></div>Ghế VIP</div>
+        <div class="legend-item"><div class="legend-box" style="background:var(--sold);"></div>Đã bán</div>
+        <div class="legend-item"><div class="legend-box" style="background:var(--m1);"></div>Tín (bạn)</div>
+        <div class="legend-item"><div class="legend-box" style="background:var(--m2);"></div>Minh</div>
+        <div class="legend-item"><div class="legend-box" style="background:var(--m3);"></div>An</div>
+        <div class="legend-item"><div class="legend-box" style="background:var(--m4);"></div>Huy</div>
+      </div>
+    </div>
+
+    <!-- Group seat summary -->
+    <div class="group-seat-summary">
+      <div class="title">Vị trí nhóm</div>
+      <div class="gss-row"><div class="gss-dot" style="background:var(--m1);"></div><div class="gss-name">Tín</div><div class="gss-seats" id="gss-tin">Chưa chọn</div></div>
+      <div class="gss-row"><div class="gss-dot" style="background:var(--m2);"></div><div class="gss-name">Minh</div><div class="gss-seats" id="gss-minh">Chưa chọn</div></div>
+      <div class="gss-row"><div class="gss-dot" style="background:var(--m3);"></div><div class="gss-name">An</div><div class="gss-seats" id="gss-an">Chưa chọn</div></div>
+      <div class="gss-row"><div class="gss-dot" style="background:var(--m4);"></div><div class="gss-name">Huy</div><div class="gss-seats" id="gss-huy">Chưa chọn</div></div>
+    </div>
+
+    <div class="bottom-bar">
+      <div class="info">
+        <div class="label" id="seat-count-label">Chưa chọn ghế</div>
+        <div class="value" id="seat-total">0đ</div>
+        <div class="sub">Tín: bạn đang chọn</div>
+      </div>
+      <button class="cta-primary" id="seat-cta" onclick="goTo('screen-fnb')" style="width:auto;min-width:110px;" disabled>Tiếp tục</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 6: F&B SELECTION
+  ═══════════════════════════════════════════ -->
+  <div class="screen" id="screen-fnb">
+    <div class="status-bar"><span>19:22</span><div class="right"><span>5G</span><span>📶</span></div></div>
+    <div class="header">
+      <div class="btn-back" onclick="goTo('screen-seats')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0B3B60" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>
+      <div class="header-title">Chọn combo</div>
+      <div style="width:36px;"></div>
+    </div>
+    <div class="countdown-banner" id="fnb-countdown">
+      <span>⏱</span>
+      <span>Thời gian giữ ghế:</span>
+      <span class="time" id="fnb-countdown-time">06:20</span>
+    </div>
+    <div class="group-ctx" style="padding:7px 16px;">
+      <div style="font-size:13px;font-weight:700;color:var(--white);">🍿 Đang chọn cho: <span style="color:#FFD2A6;">Tín</span></div>
+      <div style="width:24px;height:24px;border-radius:50%;background:var(--m1);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--white);">T</div>
+    </div>
+    <div class="body">
+      <!-- Combos -->
+      <div style="padding:12px 0 0;">
+        <div class="fnb-card">
+          <div class="fnb-img">🍿🥤</div>
+          <div class="fnb-info">
+            <div class="fnb-name">Combo 1 Big Extra</div>
+            <div class="fnb-desc">1 bắp rang bơ lớn + 1 Pepsi cỡ lớn</div>
+            <div class="fnb-price">115.000đ</div>
+            <div class="stepper">
+              <button class="stepper-btn" onclick="updateStepper('c1',-1)">−</button>
+              <span class="stepper-count" id="c1-count">0</span>
+              <button class="stepper-btn" onclick="updateStepper('c1',1)">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="fnb-card">
+          <div class="fnb-img">🍿🥤🥤</div>
+          <div class="fnb-info">
+            <div class="fnb-name">Combo 2 Big Extra</div>
+            <div class="fnb-desc">1 bắp rang bơ lớn + 2 Pepsi cỡ lớn + 1 snack</div>
+            <div class="fnb-price">134.000đ</div>
+            <div class="stepper">
+              <button class="stepper-btn" onclick="updateStepper('c2',-1)">−</button>
+              <span class="stepper-count" id="c2-count">0</span>
+              <button class="stepper-btn" onclick="updateStepper('c2',1)">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="fnb-card">
+          <div class="fnb-img">🌽🥤🥤🥤</div>
+          <div class="fnb-info">
+            <div class="fnb-name">Combo 3</div>
+            <div class="fnb-desc">1 bắp lớn + 3 Pepsi + 1 snack cao cấp</div>
+            <div class="fnb-price">149.000đ</div>
+            <div class="stepper">
+              <button class="stepper-btn" onclick="updateStepper('c3',-1)">−</button>
+              <span class="stepper-count" id="c3-count">0</span>
+              <button class="stepper-btn" onclick="updateStepper('c3',1)">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="fnb-card">
+          <div class="fnb-img">🍫🥤</div>
+          <div class="fnb-info">
+            <div class="fnb-name">Combo 4</div>
+            <div class="fnb-desc">Combo deluxe 4 người: 2 bắp + 4 Pepsi + 2 snack</div>
+            <div class="fnb-price">229.000đ</div>
+            <div class="stepper">
+              <button class="stepper-btn" onclick="updateStepper('c4',-1)">−</button>
+              <span class="stepper-count" id="c4-count">0</span>
+              <button class="stepper-btn" onclick="updateStepper('c4',1)">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Group F&B summary -->
+      <div class="section-heading">Tóm tắt F&B nhóm</div>
+      <div style="padding:0 16px 16px;">
+        <div class="card" style="margin:0;">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Đơn hàng tổng hợp — tránh mua trùng combo</div>
+          <div id="group-fnb-summary">
+            <div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--m1);flex-shrink:0;"></div>
+              <div style="font-size:12px;font-weight:600;width:36px;flex-shrink:0;">Tín</div>
+              <div style="font-size:12px;color:var(--text-muted);flex:1;" id="fnb-tin-summary">Đang chọn...</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--m2);flex-shrink:0;"></div>
+              <div style="font-size:12px;font-weight:600;width:36px;flex-shrink:0;">Minh</div>
+              <div style="font-size:12px;color:var(--text-muted);">Không dùng combo</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--m3);flex-shrink:0;"></div>
+              <div style="font-size:12px;font-weight:600;width:36px;flex-shrink:0;">An</div>
+              <div style="font-size:12px;color:var(--text-secondary);">Combo 2 × 1 — 134.000đ</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;padding:4px 0;">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--m4);flex-shrink:0;"></div>
+              <div style="font-size:12px;font-weight:600;width:36px;flex-shrink:0;">Huy</div>
+              <div style="font-size:12px;color:var(--text-secondary);">Combo 1 × 1 — 115.000đ</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom-bar">
+      <div class="info">
+        <div class="sub">2x G8, G9 + F&B</div>
+        <div class="value" id="fnb-total">100.000đ</div>
+        <div class="label">Phần của Tín</div>
+      </div>
+      <button class="cta-primary" onclick="goTo('screen-payment')" style="width:auto;min-width:110px;">Tiếp tục</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 7: PAYMENT
+  ═══════════════════════════════════════════ -->
+  <div class="screen" id="screen-payment">
+    <div class="status-bar"><span>19:25</span><div class="right"><span>5G</span><span>📶</span></div></div>
+    <div class="header">
+      <div class="btn-back" onclick="goTo('screen-fnb')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0B3B60" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>
+      <div class="header-title">Thanh toán nhóm</div>
+      <div style="width:36px;"></div>
+    </div>
+    <div class="countdown-banner" id="pay-countdown">
+      <span>⏱</span>
+      <span>Thời gian giữ ghế:</span>
+      <span class="time" id="pay-countdown-time">05:15</span>
+    </div>
+    <div class="group-ctx" style="padding:7px 16px;">
+      <div class="icon">🎬</div>
+      <div class="info">
+        <div class="name" style="font-size:12px;">Friday Movie Night</div>
+        <div class="meta">Quý Tử Vượt Giàu • 21:00</div>
+      </div>
+    </div>
+
+    <div class="body">
+      <!-- Progress -->
+      <div style="padding:14px 16px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary);">Tiến độ thanh toán</div>
+          <div style="font-size:12px;font-weight:700;color:var(--orange);" id="pay-progress-label">1 / 4 người</div>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="pay-progress-bar" style="width:25%"></div>
+        </div>
+      </div>
+
+      <!-- Payment members -->
+      <div style="padding:8px 16px;">
+        <div class="card" style="margin:0;">
+          <!-- Tín -->
+          <div class="payment-member-row">
+            <div class="member-avatar" style="background:var(--m1);width:34px;height:34px;font-size:13px;">T</div>
+            <div style="flex:1;">
+              <div class="member-name" style="font-size:13px;">Tín <span style="font-size:10px;color:var(--text-muted);">(Người tạo)</span></div>
+              <div class="payment-label">G8, G9 + Combo 1</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="payment-amount">128.000đ</div>
+              <button class="pay-btn" id="pay-tin" onclick="makePay('tin')">Thanh toán</button>
+            </div>
+          </div>
+
+          <!-- Minh -->
+          <div class="payment-member-row">
+            <div class="member-avatar" style="background:var(--m2);width:34px;height:34px;font-size:13px;">M</div>
+            <div style="flex:1;">
+              <div class="member-name" style="font-size:13px;">Minh</div>
+              <div class="payment-label">G10</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="payment-amount">55.000đ</div>
+              <div class="pay-btn paid">✓ Đã trả</div>
+            </div>
+          </div>
+
+          <!-- An -->
+          <div class="payment-member-row">
+            <div class="member-avatar" style="background:var(--m3);width:34px;height:34px;font-size:13px;">A</div>
+            <div style="flex:1;">
+              <div class="member-name" style="font-size:13px;">An</div>
+              <div class="payment-label">G11 + Combo 2</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="payment-amount">109.000đ</div>
+              <div id="an-pay-area">
+                <div class="pay-btn" style="background:var(--surface);color:var(--text-muted);cursor:default;font-size:11px;padding:6px 10px;">Chưa trả ◌</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Huy -->
+          <div class="payment-member-row">
+            <div class="member-avatar" style="background:var(--m4);width:34px;height:34px;font-size:13px;">H</div>
+            <div style="flex:1;">
+              <div class="member-name" style="font-size:13px;">Huy</div>
+              <div class="payment-label">G12 + Combo 1</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="payment-amount">115.000đ</div>
+              <div id="huy-pay-area">
+                <div class="pay-btn" style="background:var(--surface);color:var(--text-muted);cursor:default;font-size:11px;padding:6px 10px;">Chưa trả ◌</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Total -->
+      <div style="padding:0 16px 12px;">
+        <div class="card" style="margin:0;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:12px;color:var(--text-muted);">Tổng cộng nhóm</div>
+            <div style="font-size:20px;font-weight:700;color:var(--orange);">407.000đ</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:11px;color:var(--text-muted);">4 vé + 3 combo</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sim bar for payment -->
+      <div style="padding:8px 16px 0;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;">🎮 Mô phỏng thành viên khác:</div>
+        <div style="display:flex;gap:8px;">
+          <button class="cta-primary secondary" style="flex:1;font-size:12px;padding:10px;" onclick="simPay('an')">An thanh toán</button>
+          <button class="cta-primary secondary" style="flex:1;font-size:12px;padding:10px;" onclick="simPay('huy')">Huy thanh toán</button>
+        </div>
+      </div>
+
+      <!-- Remind button -->
+      <div style="padding:12px 16px 0;">
+        <button style="width:100%;padding:11px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--white);color:var(--text-secondary);font-size:13px;font-weight:600;cursor:pointer;" onclick="showToast('Đã nhắc An và Huy thanh toán!')">
+          📢 Nhắc thành viên thanh toán
+        </button>
+      </div>
+    </div>
+
+    <div style="padding:12px 16px 20px;">
+      <button class="cta-primary" id="pay-continue-btn" onclick="goTo('screen-confirmed')" style="opacity:0.4;" disabled>Hoàn tất đặt vé</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 8: GROUP CONFIRMED
+  ═══════════════════════════════════════════ -->
+  <div class="screen" id="screen-confirmed">
+    <div class="status-bar"><span>19:31</span><div class="right"><span>5G</span><span>📶</span></div></div>
+    <div class="body">
+      <div class="success-icon">🎉</div>
+      <div class="success-title">Đặt vé thành công!</div>
+      <div class="success-sub">Friday Movie Night — 4 thành viên đã sẵn sàng cho buổi tối!</div>
+
+      <!-- Summary card -->
+      <div style="margin:20px 16px 0;">
+        <div style="background:var(--navy);border-radius:12px;padding:18px 20px;color:var(--white);margin-bottom:12px;">
+          <div style="font-size:18px;font-weight:700;">Quý Tử Vượt Giàu</div>
+          <div style="font-size:13px;opacity:0.8;margin-top:4px;">Galaxy Cinema Nguyễn Văn Quá</div>
+          <div style="font-size:13px;opacity:0.8;">07/09/2026 • 21:00 • 2D PHỤ ĐỀ</div>
+
+          <div style="height:1px;background:rgba(255,255,255,0.2);margin:14px 0;"></div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+              <div style="width:16px;height:16px;border-radius:50%;background:var(--m1);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;">T</div>
+              Tín • G8, G9
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+              <div style="width:16px;height:16px;border-radius:50%;background:var(--m2);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;">M</div>
+              Minh • G10
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+              <div style="width:16px;height:16px;border-radius:50%;background:var(--m3);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;">A</div>
+              An • G11
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+              <div style="width:16px;height:16px;border-radius:50%;background:var(--m4);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;">H</div>
+              Huy • G12
+            </div>
+          </div>
+
+          <div style="height:1px;background:rgba(255,255,255,0.2);margin:14px 0;"></div>
+          <div style="font-size:12px;opacity:0.75;">F&B: Combo 1 × 2 • Combo 2 × 1</div>
+        </div>
+
+        <!-- Stats row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
+          <div class="card" style="margin:0;text-align:center;padding:12px 8px;">
+            <div style="font-size:22px;font-weight:700;color:var(--orange);">4</div>
+            <div style="font-size:11px;color:var(--text-muted);">Thành viên</div>
+          </div>
+          <div class="card" style="margin:0;text-align:center;padding:12px 8px;">
+            <div style="font-size:22px;font-weight:700;color:var(--orange);">5</div>
+            <div style="font-size:11px;color:var(--text-muted);">Ghế ngồi</div>
+          </div>
+          <div class="card" style="margin:0;text-align:center;padding:12px 8px;">
+            <div style="font-size:22px;font-weight:700;color:var(--orange);">4</div>
+            <div style="font-size:11px;color:var(--text-muted);">Vé điện tử</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:0 16px 20px;display:flex;flex-direction:column;gap:8px;">
+      <button class="cta-primary" onclick="goTo('screen-ticket')">🎟 Xem vé của tôi</button>
+      <button class="cta-primary secondary" onclick="showToast('Đang mở thông tin nhóm...')">👥 Xem thông tin nhóm</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 9: E-TICKET
+  ═══════════════════════════════════════════ -->
+  <div class="screen" id="screen-ticket">
+    <div class="status-bar"><span>19:32</span><div class="right"><span>5G</span><span>📶</span></div></div>
+    <div class="header">
+      <div class="btn-back" onclick="goTo('screen-confirmed')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0B3B60" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </div>
+      <div class="header-title">Vé điện tử</div>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B3B60" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+    </div>
+
+    <div class="body">
+      <div style="padding:12px 0 0;">
+        <!-- Group tag -->
+        <div style="text-align:center;margin-bottom:12px;">
+          <span class="notif">🎬 Friday Movie Night</span>
+        </div>
+
+        <!-- Ticket -->
+        <div class="ticket">
+          <div class="ticket-header">
+            <div class="movie">QUÝ TỬ VƯỢT GIÀU</div>
+            <div class="cinema">Galaxy Cinema Nguyễn Văn Quá</div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <span class="badge badge-age">K</span>
+              <span class="badge badge-format">2D PHỤ ĐỀ</span>
+            </div>
+          </div>
+          <div class="ticket-body">
+            <div class="ticket-row">
+              <span class="ticket-label">Ngày chiếu</span>
+              <span class="ticket-value">07/09/2026</span>
+            </div>
+            <div class="ticket-row">
+              <span class="ticket-label">Giờ chiếu</span>
+              <span class="ticket-value">21:00</span>
+            </div>
+            <div class="ticket-row">
+              <span class="ticket-label">Rạp</span>
+              <span class="ticket-value">NVQ — Phòng 3</span>
+            </div>
+            <div class="ticket-row">
+              <span class="ticket-label">Ghế</span>
+              <span class="ticket-value" style="color:var(--orange);">G8 • G9</span>
+            </div>
+            <div class="ticket-row">
+              <span class="ticket-label">Combo</span>
+              <span class="ticket-value">Combo 1 × 1</span>
+            </div>
+            <div class="ticket-row">
+              <span class="ticket-label">Thanh toán</span>
+              <span class="ticket-value" style="color:#16A34A;">128.000đ ✓</span>
+            </div>
+          </div>
+          <div class="ticket-divider"></div>
+          <div class="ticket-qr">
+            <!-- Mini QR -->
+            <div style="width:100px;height:100px;border:2px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--white);">
+              <div style="display:grid;grid-template-columns:repeat(5,12px);gap:2px;padding:4px;">
+                <div style="width:12px;height:12px;background:#000;border-radius:1px;grid-column:span 2;grid-row:span 2;border:3px solid #000;display:flex;align-items:center;justify-content:center;"><div style="width:4px;height:4px;background:#000;border-radius:1px;"></div></div>
+                <div style="width:12px;height:12px;background:transparent;"></div>
+                <div style="width:12px;height:12px;background:#000;border-radius:1px;"></div>
+                <div style="width:12px;height:12px;background:#000;border-radius:1px;"></div>
+                <div style="width:12px;height:12px;background:#000;border-radius:1px;"></div>
+                <div style="width:12px;height:12px;background:transparent;"></div>
+                <div style="width:12px;height:12px;background:#000;border-radius:1px;"></div>
+                <div style="width:12px;height:12px;background:transparent;"></div>
+                <div style="width:12px;height:12px;background:#000;border-radius:1px;"></div>
+                <div style="width:12px;height:12px;background:#000;border-radius:1px;"></div>
+                <div style="width:12px;height:12px;background:transparent;"></div>
+                <div style="width:12px;height:12px;background:#000;border-radius:1px;"></div>
+                <div style="width:12px;height:12px;background:#000;border-radius:1px;grid-column:span 2;grid-row:span 2;border:3px solid #000;display:flex;align-items:center;justify-content:center;"><div style="width:4px;height:4px;background:#000;border-radius:1px;"></div></div>
+              </div>
+            </div>
+            <div class="code">GTH-471 • TIN • G8G9</div>
+            <div style="font-size:10px;color:var(--text-muted);">Vé điện tử — Xuất trình tại quầy</div>
+          </div>
+        </div>
+
+        <!-- Group ticket summary -->
+        <div style="margin:12px 16px;">
+          <div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">Vé các thành viên khác</div>
+          <div class="card" style="margin:0;">
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+              <div class="member-avatar" style="background:var(--m2);width:28px;height:28px;font-size:11px;">M</div>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:600;">Minh</div>
+                <div style="font-size:11px;color:var(--text-muted);">G10</div>
+              </div>
+              <div style="font-size:12px;color:#16A34A;font-weight:600;">✓ Đã xác nhận</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+              <div class="member-avatar" style="background:var(--m3);width:28px;height:28px;font-size:11px;">A</div>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:600;">An</div>
+                <div style="font-size:11px;color:var(--text-muted);">G11 + Combo 2</div>
+              </div>
+              <div style="font-size:12px;color:#16A34A;font-weight:600;">✓ Đã xác nhận</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+              <div class="member-avatar" style="background:var(--m4);width:28px;height:28px;font-size:11px;">H</div>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:600;">Huy</div>
+                <div style="font-size:11px;color:var(--text-muted);">G12 + Combo 1</div>
+              </div>
+              <div style="font-size:12px;color:#16A34A;font-weight:600;">✓ Đã xác nhận</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN: SOLO SEAT (fallback)
+  ═══════════════════════════════════════════ -->
+  <div class="screen" id="screen-seats-solo">
+    <!-- reuse seat screen but without group features -->
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────
+const state = {
+  memberCount: 4,
+  payMode: 'split',
+  groupName: 'Friday Movie Night',
+  selectedShowtime: '21:00',
+  countdown: 480,
+  fnbCountdown: 380,
+  payCountdown: 315,
+  mySeats: [],
+  memberSeats: { tin: [], minh: [], an: [], huy: [] },
+  comboPrices: { c1: 115000, c2: 134000, c3: 149000, c4: 229000 },
+  comboQty: { c1: 0, c2: 0, c3: 0, c4: 0 },
+  payStatus: { tin: false, minh: true, an: false, huy: false },
+  paidCount: 1
+};
+
+// ─── SEAT MAP DATA ────────────────────────────────
+const rows = ['O','N','M','L','K','J','I','H','G','F','E','D','C','B','A'];
+const seatsPerRow = 10;
+const soldSeats = ['A3','A4','B5','C2','D7','D8','E1','F3','F4','F9','H2','H3','I5','J6'];
+const vipRows = ['D','E','F'];
+
+function buildSeatMap() {
+  const grid = document.getElementById('seat-grid');
+  grid.innerHTML = '';
+
+  rows.forEach((row, ri) => {
+    if (ri === 12) {
+      const aisle = document.createElement('div');
+      aisle.className = 'aisle';
+      grid.appendChild(aisle);
+    }
+
+    const rowEl = document.createElement('div');
+    rowEl.className = 'seat-row';
+
+    const label = document.createElement('div');
+    label.className = 'row-label';
+    label.textContent = row;
+    rowEl.appendChild(label);
+
+    for (let c = 1; c <= seatsPerRow; c++) {
+      const seatId = `${row}${c}`;
+      const seat = document.createElement('div');
+      seat.className = 'seat';
+      seat.dataset.id = seatId;
+
+      if (soldSeats.includes(seatId)) {
+        seat.classList.add('sold');
+      } else if (vipRows.includes(row)) {
+        seat.style.borderColor = 'var(--gold)';
+        seat.classList.add('available');
+        seat.onclick = () => toggleSeat(seatId, seat);
+      } else {
+        seat.classList.add('available');
+        seat.onclick = () => toggleSeat(seatId, seat);
+      }
+
+      // Preselected group seats
+      if (state.memberSeats.minh.includes(seatId)) { seat.classList.remove('available'); seat.classList.add('m2'); seat.textContent = 'M'; }
+      if (state.memberSeats.an.includes(seatId)) { seat.classList.remove('available'); seat.classList.add('m3'); seat.textContent = 'A'; }
+      if (state.memberSeats.huy.includes(seatId)) { seat.classList.remove('available'); seat.classList.add('m4'); seat.textContent = 'H'; }
+
+      rowEl.appendChild(seat);
+    }
+    grid.appendChild(rowEl);
+  });
+}
+
+function toggleSeat(id, el) {
+  if (el.classList.contains('sold') || el.classList.contains('m2') || el.classList.contains('m3') || el.classList.contains('m4')) return;
+
+  const idx = state.mySeats.indexOf(id);
+  if (idx === -1) {
+    if (state.mySeats.length >= 4) { showToast('Tối đa 4 ghế mỗi người'); return; }
+    state.mySeats.push(id);
+    el.classList.remove('available');
+    el.classList.add('my-seat');
+    el.textContent = 'T';
+  } else {
+    state.mySeats.splice(idx, 1);
+    el.classList.remove('my-seat');
+    el.classList.add('available');
+    el.textContent = '';
+  }
+  state.memberSeats.tin = [...state.mySeats];
+  updateSeatUI();
+}
+
+function updateSeatUI() {
+  const count = state.mySeats.length;
+  const total = count * 55000;
+  document.getElementById('seat-count-label').textContent = count > 0 ? `${count}x ghế: ${state.mySeats.join(', ')}` : 'Chưa chọn ghế';
+  document.getElementById('seat-total').textContent = total > 0 ? formatMoney(total) : '0đ';
+  document.getElementById('gss-tin').textContent = state.mySeats.length > 0 ? state.mySeats.join(', ') : 'Chưa chọn';
+
+  const cta = document.getElementById('seat-cta');
+  cta.disabled = count === 0;
+  cta.style.opacity = count > 0 ? '1' : '0.5';
+
+  // Update fnb total
+  updateFnbTotal();
+}
+
+function updateFnbTotal() {
+  const seatTotal = state.mySeats.length * 55000;
+  const fnbTotal = Object.keys(state.comboQty).reduce((sum, k) => sum + state.comboQty[k] * state.comboPrices[k], 0);
+  document.getElementById('fnb-total').textContent = formatMoney(seatTotal + fnbTotal);
+
+  // Update fnb summary for Tin
+  const c1 = state.comboQty.c1, c2 = state.comboQty.c2, c3 = state.comboQty.c3, c4 = state.comboQty.c4;
+  let parts = [];
+  if (c1) parts.push(`Combo 1 × ${c1}`);
+  if (c2) parts.push(`Combo 2 × ${c2}`);
+  if (c3) parts.push(`Combo 3 × ${c3}`);
+  if (c4) parts.push(`Combo 4 × ${c4}`);
+  const el = document.getElementById('fnb-tin-summary');
+  if (el) el.textContent = parts.length > 0 ? parts.join(', ') : 'Không dùng combo';
+}
+
+// ─── NAVIGATION ──────────────────────────────────
+function goTo(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const target = document.getElementById(screenId);
+  if (target) {
+    target.classList.add('active');
+    target.scrollTop = 0;
+  }
+
+  if (screenId === 'screen-seats') buildSeatMap();
+}
+
+// ─── TOGGLES ─────────────────────────────────────
+function toggleAccordion(id) {
+  const el = document.getElementById(id);
+  const arrow = document.getElementById(id + '-arrow');
+  if (!el) return;
+  el.classList.toggle('open');
+  if (arrow) arrow.textContent = el.classList.contains('open') ? '^' : 'v';
+}
+
+function selectShowtime(el, time) {
+  document.querySelectorAll('.showtime-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  state.selectedShowtime = time;
+}
+
+function selectPayMode(mode) {
+  state.payMode = mode;
+  ['split','org'].forEach(m => {
+    document.getElementById('pay-' + m).classList.remove('selected');
+    document.getElementById('dot-' + m).classList.remove('selected');
+  });
+  document.getElementById('pay-' + mode).classList.add('selected');
+  const dot = document.getElementById('dot-' + mode);
+  dot.classList.add('selected');
+}
+
+function changeMemberCount(delta) {
+  state.memberCount = Math.max(2, Math.min(8, state.memberCount + delta));
+  document.getElementById('member-count').textContent = state.memberCount;
+  document.getElementById('member-count-label').textContent = state.memberCount + ' người';
+}
+
+// ─── STEPPERS ────────────────────────────────────
+function updateStepper(key, delta) {
+  state.comboQty[key] = Math.max(0, (state.comboQty[key] || 0) + delta);
+  document.getElementById(key + '-count').textContent = state.comboQty[key];
+  updateFnbTotal();
+}
+
+// ─── PAYMENT ─────────────────────────────────────
+function makePay(member) {
+  if (state.payStatus[member]) return;
+  state.payStatus[member] = true;
+  state.paidCount++;
+
+  const btn = document.getElementById('pay-' + member);
+  if (btn) {
+    btn.className = 'pay-btn paid';
+    btn.textContent = '✓ Đã trả';
+    btn.onclick = null;
+  }
+
+  updatePayProgress();
+  showToast('💳 Thanh toán thành công!');
+}
+
+function simPay(member) {
+  if (state.payStatus[member]) { showToast(`${member === 'an' ? 'An' : 'Huy'} đã thanh toán rồi`); return; }
+  state.payStatus[member] = true;
+  state.paidCount++;
+
+  const areaId = member + '-pay-area';
+  const area = document.getElementById(areaId);
+  if (area) {
+    area.innerHTML = '<div class="pay-btn paid">✓ Đã trả</div>';
+  }
+
+  updatePayProgress();
+  showToast(`✓ ${member === 'an' ? 'An' : 'Huy'} đã thanh toán!`);
+}
+
+function updatePayProgress() {
+  const pct = Math.round((state.paidCount / 4) * 100);
+  const bar = document.getElementById('pay-progress-bar');
+  const label = document.getElementById('pay-progress-label');
+  if (bar) bar.style.width = pct + '%';
+  if (label) label.textContent = `${state.paidCount} / 4 người`;
+
+  const btn = document.getElementById('pay-continue-btn');
+  if (state.paidCount >= 4) {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    showToast('🎉 Tất cả đã thanh toán!');
+  }
+}
+
+// ─── SIMULATIONS ─────────────────────────────────
+function simLobbyStep(step) {
+  if (step === 'all-joined') {
+    const anRow = document.getElementById('lobby-an');
+    const huyRow = document.getElementById('lobby-huy');
+
+    anRow.innerHTML = `
+      <div class="member-avatar" style="background:var(--m3);">A</div>
+      <div class="member-info">
+        <div class="member-name">An</div>
+      </div>
+      <span class="member-status status-confirmed">Đã tham gia</span>
+    `;
+    huyRow.innerHTML = `
+      <div class="member-avatar" style="background:var(--m4);">H</div>
+      <div class="member-info">
+        <div class="member-name">Huy</div>
+      </div>
+      <span class="member-status status-confirmed">Đã tham gia</span>
+    `;
+    const ticker = document.getElementById('lobby-ticker');
+    ticker.textContent = '✓ An và Huy vừa tham gia! Cả nhóm đã đủ 4 người.';
+    showToast('👥 Cả nhóm đã tham gia!');
+
+    // Update the card
+    const countEl = document.querySelector('#screen-lobby .card:last-child .value') ||
+                     document.querySelector('#screen-lobby [style*="color:var(--orange)"]');
+    if (countEl) countEl.textContent = '4 / 4';
+  }
+}
+
+function simSeatStep(member) {
+  const seatMap = { minh: ['G10'], an: ['G11'], huy: ['G12'] };
+  const colors = { minh: 'var(--m2)', an: 'var(--m3)', huy: 'var(--m4)' };
+  const initials = { minh: 'M', an: 'A', huy: 'H' };
+  const gssIds = { minh: 'gss-minh', an: 'gss-an', huy: 'gss-huy' };
+  const names = { minh: 'Minh', an: 'An', huy: 'Huy' };
+
+  const seats = seatMap[member];
+  const color = colors[member];
+  const initial = initials[member];
+
+  seats.forEach(seatId => {
+    state.memberSeats[member].push(seatId);
+    const el = document.querySelector(`[data-id="${seatId}"]`);
+    if (el) {
+      el.className = 'seat ' + member;
+      el.style.background = color;
+      el.style.borderColor = color;
+      el.style.color = 'white';
+      el.textContent = initial;
+    }
+  });
+
+  document.getElementById(gssIds[member]).textContent = seats.join(', ');
+
+  const ticker = document.getElementById('seat-ticker');
+  ticker.textContent = `📡 ${names[member]} vừa chọn ghế ${seats.join(', ')} theo thời gian thực!`;
+  ticker.classList.add('visible');
+
+  showToast(`${names[member]} đã chọn ${seats.join(', ')}`);
+}
+
+// ─── COUNTDOWN ───────────────────────────────────
+function startCountdown(key, displayId, seconds) {
+  let remaining = seconds;
+  const el = document.getElementById(displayId);
+  if (!el) return;
+
+  const interval = setInterval(() => {
+    remaining--;
+    if (remaining < 0) { clearInterval(interval); return; }
+    const m = Math.floor(remaining / 60).toString().padStart(2, '0');
+    const s = (remaining % 60).toString().padStart(2, '0');
+    el.textContent = `${m}:${s}`;
+
+    const bar = el.closest('.countdown-banner');
+    if (remaining < 60 && bar) bar.classList.add('urgent');
+    else if (bar) bar.classList.remove('urgent');
+  }, 1000);
+}
+
+// ─── TOAST ───────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ─── FORMAT ──────────────────────────────────────
+function formatMoney(n) {
+  return n.toLocaleString('vi-VN') + 'đ';
+}
+
+// ─── INIT ─────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  startCountdown('seat', 'countdown-time', 480);
+  startCountdown('fnb', 'fnb-countdown-time', 380);
+  startCountdown('pay', 'pay-countdown-time', 315);
+});
+</script>
+</body>
+</html>
