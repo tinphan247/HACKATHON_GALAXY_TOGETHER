@@ -1,0 +1,24 @@
+:root {
+  --orange: #F58020;
+  --orange-light: #FFD2A6;
+  --navy: #0B3B60;
+  --navy-light: #E8F0F8;
+  --white: #FFFFFF;
+  --black: #000000;
+  --text-primary: #000000;
+  --text-secondary: #555555;
+  --text-muted: #888888;
+  --border: #E2E2E2;
+  --surface: #F7F8FA;
+  --sold: #C4C4C4;
+  --gold: #E5A910;
+  --star: #FDB813;
+
+  /* Member Colors */
+  --m1: #F58020; /* Host = Galaxy Orange (brand) */
+  --m2: #7C3AED; /* Member 2 = Purple */
+  --m3: #0EA5E9; /* Member 3 = Blue */
+  --m4: #10B981; /* Member 4 = Green */
+
+  --r: 8px;
+}

@@ -3,10 +3,16 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "db:migrate": "node database/migrate_neon.js"
+    "start": "node src/server.js",
+    "db:migrate": "node database/migrate_neon.js",
+    "test:api": "node tests/integration_api.test.js",
+    "test:ws": "node tests/test_realtime_ws.js"
   },
   "dependencies": {
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
-    "pg": "^8.23.0"
+    "express": "^5.2.1",
+    "pg": "^8.23.0",
+    "ws": "^8.21.3"
   }
 }
