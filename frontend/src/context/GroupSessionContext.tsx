@@ -1,16 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type {
   ScreenId,
+  BookingMode,
   CurrentUser,
   ShowtimeSelection,
   PaymentMode,
   DisplayMember,
   GroupSessionDetailResponseData,
   HeldSeatInfo,
+  GroupFnBSummary,
+  PaymentSummaryResponse,
+  PaymentMethod,
+  MemberPaymentInfo,
 } from '../types/session';
 import { groupSessionService } from '../services/groupSessionService';
 import { storageService } from '../services/storageService';
-import { getMemberColor } from '../constants/theme';
+import { getMemberColor, getMemberColorByKey } from '../constants/theme';
 import { POLLING_INTERVAL_MS } from '../constants/config';
 import { useToast } from './ToastContext';
 import { useSessionRealtime } from '../hooks/useSessionRealtime';
@@ -22,7 +27,13 @@ interface GroupSessionContextType {
   goBack: () => void;
   screenHistory: ScreenId[];
 
-  // Session & User Identity
+  // Booking Mode & Identity
+  bookingMode: BookingMode;
+  setBookingMode: (mode: BookingMode) => void;
+  isGroupMode: boolean;
+  startSoloBooking: (showtimeUpdate?: Partial<ShowtimeSelection>) => void;
+  clearGroupSession: () => void;
+
   currentUser: CurrentUser | null;
   setCurrentUser: (u: CurrentUser) => void;
   sessionId: string | null;
@@ -41,9 +52,17 @@ interface GroupSessionContextType {
   isPollingActive: boolean;
   realtimeStatus: RealtimeStatus;
 
+  // Modal & Timer State
+  showShareModal: boolean;
+  setShowShareModal: (open: boolean) => void;
+  isHoldTimerStarted: boolean;
+  holdExpiresAt: Date | null;
+  startHoldTimerAction: () => Promise<boolean>;
+
   // Actions
   createGroup: (name: string, memberCount: number, payMode: PaymentMode, hostName?: string) => Promise<boolean>;
   joinGroup: (code: string, memberName: string) => Promise<boolean>;
+  leaveGroup: () => Promise<void>;
   simulateMemberJoin: (name: string) => Promise<void>;
   refreshSessionData: () => Promise<void>;
   resetToHome: () => void;
@@ -55,12 +74,25 @@ interface GroupSessionContextType {
   toggleSeat: (seatId: string) => void;
   memberSeats: { tin: string[]; minh: string[]; an: string[]; huy: string[] };
   simulateSeatSelection: (memberKey: 'minh' | 'an' | 'huy', seats: string[]) => void;
+
+  // Realtime F&B State (Phase 6)
   comboQty: Record<string, number>;
   updateComboQty: (key: string, delta: number) => void;
   comboPrices: Record<string, number>;
+  groupFnBSummary: GroupFnBSummary | null;
+  loadSessionFnB: () => Promise<void>;
+  simulateMemberFnB: (memberName: string, comboId: string, qty: number) => Promise<void>;
+
+  // Realtime Payment State (Phase 7)
   payStatus: Record<string, boolean>;
   paidCount: number;
   payForUser: (userKey: string) => void;
+  paymentSummary: PaymentSummaryResponse | null;
+  loadPaymentSummary: () => Promise<void>;
+  payMyShare: (method?: PaymentMethod) => Promise<boolean>;
+  payForMember: (userId: string, method?: PaymentMethod) => Promise<boolean>;
+  payHostAllGroup: (method?: PaymentMethod) => Promise<boolean>;
+  simulatePayment: (memberName: string, method?: PaymentMethod) => Promise<void>;
 }
 
 const DEFAULT_SHOWTIME: ShowtimeSelection = {
@@ -103,19 +135,71 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     storageService.setCurrentUser(u);
   }, []);
 
-  const [sessionId, setSessionId] = useState<string | null>(() => storageService.getSessionId());
-  const [inviteCode, setInviteCode] = useState<string | null>(() => storageService.getInviteCode());
+  // Booking Mode & Session State
+  const [bookingMode, setBookingMode] = useState<BookingMode>('SOLO');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [sessionData, setSessionData] = useState<GroupSessionDetailResponseData | null>(null);
+
+  // Active Group Mode: strictly true only when explicitly in GROUP mode AND sessionId is present
+  const isGroupMode = bookingMode === 'GROUP' && !!sessionId;
 
   const [selectedShowtime, setSelectedShowtime] = useState<ShowtimeSelection>(DEFAULT_SHOWTIME);
   const [isBackendHealthy, setIsBackendHealthy] = useState<boolean>(true);
   const [isLiveApi, setIsLiveApi] = useState<boolean>(true);
   const [isPollingActive, setIsPollingActive] = useState<boolean>(false);
 
-  // Realtime Seat State (Phase 5)
+  // Group Share Modal & Hold Timer State
+  const [showShareModal, setShowShareModal] = useState<boolean>(false);
+  const [isHoldTimerStarted, setIsHoldTimerStarted] = useState<boolean>(false);
+  const [holdExpiresAt, setHoldExpiresAt] = useState<Date | null>(null);
+  const [soloSeats, setSoloSeats] = useState<string[]>([]);
+
+  // Start Solo Booking: explicitly clears any group state and switches to SOLO mode
+  const startSoloBooking = useCallback((showtimeUpdate?: Partial<ShowtimeSelection>) => {
+    console.log('[BookingMode] Initialized SOLO booking mode');
+    setBookingMode('SOLO');
+    setSessionId(null);
+    setInviteCode(null);
+    setSessionData(null);
+    setHeldSeats({});
+    setShowShareModal(false);
+    setIsHoldTimerStarted(false);
+    setHoldExpiresAt(null);
+    setSoloSeats([]);
+    storageService.removeSessionId();
+    storageService.removeInviteCode();
+    if (showtimeUpdate) {
+      setSelectedShowtime((prev) => ({
+        ...prev,
+        ...showtimeUpdate,
+      }));
+    }
+  }, []);
+
+  // Clear Group Session: reset back to clean SOLO mode
+  const clearGroupSession = useCallback(() => {
+    console.log('[BookingMode] Cleared group session to SOLO mode');
+    setBookingMode('SOLO');
+    setSessionId(null);
+    setInviteCode(null);
+    setSessionData(null);
+    setHeldSeats({});
+    setShowShareModal(false);
+    setSoloSeats([]);
+    storageService.removeSessionId();
+    storageService.removeInviteCode();
+  }, []);
+
+  // Realtime Seat & F&B State (Phase 5 & 6)
   const [heldSeats, setHeldSeats] = useState<Record<string, HeldSeatInfo>>({});
   const [comboQty, setComboQty] = useState<Record<string, number>>({ c1: 0, c2: 0, c3: 0, c4: 0 });
   const comboPrices: Record<string, number> = { c1: 115000, c2: 134000, c3: 149000, c4: 229000 };
+  const [groupFnBSummary, setGroupFnBSummary] = useState<GroupFnBSummary | null>(null);
+
+  // Realtime Payment State (Phase 7)
+  const [paymentSummary, setPaymentSummary] = useState<PaymentSummaryResponse | null>(null);
+
   const [payStatus, setPayStatus] = useState<Record<string, boolean>>({
     tin: false,
     minh: true,
@@ -149,6 +233,10 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setInviteCode(data.invite.code);
         storageService.setInviteCode(data.invite.code);
       }
+      if ((data as unknown as { seat_hold_expires_at?: string }).seat_hold_expires_at) {
+        setIsHoldTimerStarted(true);
+        setHoldExpiresAt(new Date((data as unknown as { seat_hold_expires_at: string }).seat_hold_expires_at));
+      }
       setIsBackendHealthy(true);
     } catch {
       setIsBackendHealthy(false);
@@ -162,12 +250,15 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const seats = await groupSessionService.getSessionSeats(id);
       const seatMap: Record<string, HeldSeatInfo> = {};
-      seats.forEach((s: { seat_id: string; seat_code: string; user_id: string; member_name: string }) => {
+      seats.forEach((s: { seat_id: string; seat_code: string; user_id: string; member_name: string; color_slot?: string }) => {
+        const color = s.color_slot ? getMemberColorByKey(s.color_slot) : undefined;
         seatMap[s.seat_id] = {
           seatId: s.seat_id,
           seatCode: s.seat_code,
           userId: s.user_id,
           memberName: s.member_name,
+          colorKey: color?.key,
+          colorHex: color?.hex,
         };
       });
       setHeldSeats(seatMap);
@@ -176,31 +267,84 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [sessionId]);
 
-  const loadSessionSeatsRef = useRef(loadSessionSeats);
-  const refreshSessionDataRef = useRef(refreshSessionData);
-  useEffect(() => {
-    loadSessionSeatsRef.current = loadSessionSeats;
-    refreshSessionDataRef.current = refreshSessionData;
-  });
-
-  // Initial load of session and seats
-  useEffect(() => {
-    if (sessionId) {
-      refreshSessionDataRef.current();
-      loadSessionSeatsRef.current();
+  // Load session F&B summary from REST API (Phase 6)
+  const loadSessionFnB = useCallback(async (targetId?: string) => {
+    const id = targetId || sessionId;
+    if (!id) return;
+    try {
+      const summary = await groupSessionService.getSessionFnB(id);
+      setGroupFnBSummary(summary);
+    } catch (e) {
+      console.warn('Failed to load session F&B summary:', e);
     }
   }, [sessionId]);
 
-  // Reload seats when entering seat selection screen
-  useEffect(() => {
-    if (sessionId && currentScreen === 'screen-seats') {
-      loadSessionSeatsRef.current();
+  // Load session Payment summary from REST API (Phase 7)
+  const loadPaymentSummary = useCallback(async (targetId?: string) => {
+    const id = targetId || sessionId;
+    if (!id) return;
+    try {
+      const summary = await groupSessionService.getPaymentSummary(id);
+      setPaymentSummary(summary);
+      if (summary.members) {
+        const nextStatus: Record<string, boolean> = {};
+        summary.members.forEach((m: MemberPaymentInfo) => {
+          const key = m.userId === currentUser?.userId
+            ? 'tin'
+            : m.memberName.toLowerCase().includes('minh')
+            ? 'minh'
+            : m.memberName.toLowerCase().includes('an')
+            ? 'an'
+            : m.memberName.toLowerCase().includes('huy')
+            ? 'huy'
+            : m.userId;
+          nextStatus[key] = m.isPaid;
+        });
+        setPayStatus(nextStatus);
+        setPaidCount(summary.paidMembersCount);
+      }
+    } catch (e) {
+      console.warn('Failed to load session payment summary:', e);
     }
-  }, [sessionId, currentScreen]);
+  }, [sessionId, currentUser]);
 
-  // Phase 4: Realtime WebSocket Collaboration
+  const loadSessionSeatsRef = useRef(loadSessionSeats);
+  const loadSessionFnBRef = useRef(loadSessionFnB);
+  const loadPaymentSummaryRef = useRef(loadPaymentSummary);
+  const refreshSessionDataRef = useRef(refreshSessionData);
+  useEffect(() => {
+    loadSessionSeatsRef.current = loadSessionSeats;
+    loadSessionFnBRef.current = loadSessionFnB;
+    loadPaymentSummaryRef.current = loadPaymentSummary;
+    refreshSessionDataRef.current = refreshSessionData;
+  });
+
+  // Initial load of session, seats, F&B and payments (Only in active GROUP mode)
+  useEffect(() => {
+    if (isGroupMode && sessionId) {
+      refreshSessionDataRef.current();
+      loadSessionSeatsRef.current();
+      loadSessionFnBRef.current();
+      loadPaymentSummaryRef.current();
+    }
+  }, [isGroupMode, sessionId]);
+
+  // Reload seats, F&B or Payment when entering respective screens (Only in active GROUP mode)
+  useEffect(() => {
+    if (isGroupMode && sessionId) {
+      if (currentScreen === 'screen-seats') {
+        loadSessionSeatsRef.current();
+      } else if (currentScreen === 'screen-fnb') {
+        loadSessionFnBRef.current();
+      } else if (currentScreen === 'screen-payment') {
+        loadPaymentSummaryRef.current();
+      }
+    }
+  }, [isGroupMode, sessionId, currentScreen]);
+
+  // Phase 4 & 6: Realtime WebSocket Collaboration (Connected ONLY when in active GROUP mode)
   const { realtimeStatus } = useSessionRealtime({
-    sessionId,
+    sessionId: isGroupMode ? sessionId : null,
     userId: currentUser?.userId,
     onMemberJoined: (payload) => {
       if (!payload?.member) return;
@@ -238,6 +382,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     onSeatHeld: (payload) => {
       if (!payload?.seatId) return;
       const seatId = payload.seatId;
+      const color = payload.colorSlot ? getMemberColorByKey(payload.colorSlot) : undefined;
       setHeldSeats((prev) => ({
         ...prev,
         [seatId]: {
@@ -245,8 +390,8 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           seatCode: payload.seatCode || seatId,
           userId: payload.userId || '',
           memberName: payload.memberName || '',
-          colorKey: payload.colorKey,
-          colorHex: payload.colorHex,
+          colorKey: color?.key || payload.colorKey,
+          colorHex: color?.hex || payload.colorHex,
           heldAt: new Date().toISOString(),
         },
       }));
@@ -266,16 +411,46 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         showToast(`💺 ${payload.memberName || 'Một bạn'} đã bỏ chọn ghế ${seatId}`);
       }
     },
+    onFnBUpdated: (payload) => {
+      if (!payload) return;
+      setGroupFnBSummary(payload as unknown as GroupFnBSummary);
+      showToast('🍿 Bắp nước nhóm vừa được cập nhật!');
+    },
+    onPaymentUpdated: (payload) => {
+      if (!payload) return;
+      loadPaymentSummaryRef.current();
+      refreshSessionDataRef.current();
+      const methodStr = payload.paymentMethod ? ` qua ví ${payload.paymentMethod.toUpperCase()}` : '';
+      showToast(`💳 ${payload.memberName || 'Một bạn'} đã thanh toán thành công${methodStr}!`);
+    },
+    onHoldTimerStarted: (payload) => {
+      setIsHoldTimerStarted(true);
+      if (payload?.expiresAt) {
+        setHoldExpiresAt(new Date(payload.expiresAt as string));
+      } else {
+        setHoldExpiresAt(new Date(Date.now() + 10 * 60 * 1000));
+      }
+      showToast('⏱️ Đếm ngược giữ ghế 10 phút đã bắt đầu!');
+    },
+    onSessionConfirmed: () => {
+      refreshSessionDataRef.current();
+      loadPaymentSummaryRef.current();
+      showToast('🎉 Toàn bộ nhóm đã thanh toán thành công! Đang chuyển sang vé...');
+      setSessionData((prev) => (prev ? { ...prev, status: 'CONFIRMED' } : prev));
+      goTo('screen-confirmed');
+    },
     onReconnected: () => {
       refreshSessionDataRef.current();
       loadSessionSeatsRef.current();
+      loadSessionFnBRef.current();
+      loadPaymentSummaryRef.current();
     },
   });
 
-  // Cross-screen Session Polling: Keeps session members & seats synchronized across screens
+  // Cross-screen Session Polling: Runs ONLY when in active GROUP mode
   const isFetchingRef = useRef(false);
   useEffect(() => {
-    if (!sessionId) {
+    if (!isGroupMode || !sessionId) {
       setIsPollingActive(false);
       return;
     }
@@ -351,6 +526,8 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const newSessionId = resp.session.id;
         const code = resp.invite.code;
 
+        // ONLY on API Success, switch booking mode to GROUP
+        setBookingMode('GROUP');
         setSessionId(newSessionId);
         setInviteCode(code);
         storageService.setSessionId(newSessionId);
@@ -366,7 +543,25 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         await refreshSessionData(newSessionId);
         await loadSessionSeats(newSessionId);
 
-        showToast('✓ Tạo nhóm thành công!');
+        // If host previously selected a solo seat, hold it in group session
+        if (soloSeats.length > 0) {
+          const firstSeat = soloSeats[0];
+          try {
+            await groupSessionService.holdSeat(newSessionId, {
+              showtimeId: selectedShowtime.showTime,
+              seatId: firstSeat,
+              seatCode: firstSeat,
+              userId: hostUser.userId,
+            });
+            await loadSessionSeats(newSessionId);
+          } catch (e) {
+            console.warn('Could not auto-hold solo seat in group:', e);
+          }
+        }
+
+        setShowShareModal(true);
+        goTo('screen-seats');
+        showToast('✓ Tạo nhóm thành công! Đang ở màn hình chọn ghế');
         return true;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Không thể tạo nhóm';
@@ -374,7 +569,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return false;
       }
     },
-    [currentUser, selectedShowtime, showToast, refreshSessionData, loadSessionSeats, setCurrentUser]
+    [currentUser, selectedShowtime, showToast, refreshSessionData, loadSessionSeats, setCurrentUser, soloSeats, goTo]
   );
 
   // Join Group Action
@@ -388,10 +583,24 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           name: finalName,
         });
 
+        // ONLY on API Success, switch booking mode to GROUP
+        setBookingMode('GROUP');
         setSessionId(resp.session.id);
         storageService.setSessionId(resp.session.id);
         setInviteCode(code);
         storageService.setInviteCode(code);
+
+        // Sync showtime from joined session if present
+        if (resp.session.show_time) {
+          const syncShowTime = resp.session.show_time;
+          setSelectedShowtime((prev) => ({
+            ...prev,
+            showTime: syncShowTime,
+            showDate: resp.session.show_date || prev.showDate,
+            movieTitle: resp.session.movie_title || prev.movieTitle,
+            cinemaName: resp.session.cinema_name || prev.cinemaName,
+          }));
+        }
 
         setCurrentUser({
           userId: guestId,
@@ -411,6 +620,20 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     },
     [showToast, refreshSessionData, loadSessionSeats, setCurrentUser]
   );
+
+  // Leave Group Action: leaves backend session and resets frontend state to SOLO
+  const leaveGroup = useCallback(async () => {
+    if (sessionId && currentUser?.userId) {
+      try {
+        await groupSessionService.leaveSession(sessionId, currentUser.userId);
+      } catch (err) {
+        console.warn('Failed to call leaveSession backend API:', err);
+      }
+    }
+    clearGroupSession();
+    goTo('screen-showtimes');
+    showToast('Bạn đã rời khỏi nhóm đặt vé');
+  }, [sessionId, currentUser, clearGroupSession, goTo, showToast]);
 
   // Simulation Member Join (Calls Real API)
   const simulateMemberJoin = useCallback(
@@ -436,15 +659,52 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     [inviteCode, showToast, refreshSessionData]
   );
 
-  // Derive mySeats dynamically from heldSeats
-  const mySeats = Object.values(heldSeats)
-    .filter((s) => s.userId === currentUser?.userId)
-    .map((s) => s.seatId);
+  // Derive mySeats dynamically from heldSeats (in Group mode) or soloSeats (in Solo mode)
+  const mySeats = isGroupMode
+    ? Object.values(heldSeats)
+        .filter((s) => s.userId === currentUser?.userId)
+        .map((s) => s.seatId)
+    : soloSeats;
 
   // Realtime & REST Toggle Seat
   const toggleSeat = useCallback(
     async (seatId: string) => {
-      if (!sessionId || !currentUser) {
+      // 1. Solo Mode (isGroupMode is false)
+      if (!isGroupMode) {
+        setSoloSeats((prev) => {
+          if (prev.includes(seatId)) {
+            const next = prev.filter((s) => s !== seatId);
+            setHeldSeats((hPrev) => {
+              const hNext = { ...hPrev };
+              delete hNext[seatId];
+              return hNext;
+            });
+            return next;
+          } else {
+            if (prev.length >= 8) {
+              showToast('Tối đa 8 ghế mỗi lần đặt');
+              return prev;
+            }
+            setHeldSeats((hPrev) => ({
+              ...hPrev,
+              [seatId]: {
+                seatId,
+                seatCode: seatId,
+                userId: currentUser?.userId || 'usr_solo',
+                memberName: currentUser?.name || 'Bạn',
+                colorKey: 'orange',
+                colorHex: '#F97316',
+                heldAt: new Date().toISOString(),
+              },
+            }));
+            return [...prev, seatId];
+          }
+        });
+        return;
+      }
+
+      // 2. Group Mode (isGroupMode is true)
+      if (!currentUser || !sessionId) {
         showToast('Chưa kết nối nhóm');
         return;
       }
@@ -477,20 +737,25 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           return;
         }
 
-        const myHeldCount = Object.values(heldSeats).filter((s) => s.userId === currentUser.userId).length;
-        if (myHeldCount >= 4) {
-          showToast('Tối đa 4 ghế mỗi người');
-          return;
+        // Swapping seat: if user already has a held seat, release old one and hold new one
+        const myOldSeat = Object.values(heldSeats).find((s) => s.userId === currentUser.userId);
+        if (myOldSeat) {
+          realtimeService.releaseSeat(myOldSeat.seatId, currentUser.userId, currentUser.name);
         }
 
         // Find color slot for current user
         const myIndex = sessionData?.members?.findIndex((m) => m.user_id === currentUser.userId) ?? 0;
         const color = getMemberColor(myIndex >= 0 ? myIndex : 0);
 
-        // Optimistic hold
-        setHeldSeats((prev) => ({
-          ...prev,
-          [seatId]: {
+        // Optimistic hold with swap
+        setHeldSeats((prev) => {
+          const next: Record<string, HeldSeatInfo> = {};
+          for (const [k, v] of Object.entries(prev)) {
+            if (v.userId !== currentUser.userId) {
+              next[k] = v;
+            }
+          }
+          next[seatId] = {
             seatId,
             seatCode: seatId,
             userId: currentUser.userId,
@@ -498,8 +763,9 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
             colorKey: color.key,
             colorHex: color.hex,
             heldAt: new Date().toISOString(),
-          },
-        }));
+          };
+          return next;
+        });
 
         realtimeService.holdSeat(seatId, currentUser.userId, currentUser.name, color.key, color.hex);
 
@@ -517,8 +783,25 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
       }
     },
-    [sessionId, currentUser, heldSeats, sessionData, selectedShowtime, showToast, loadSessionSeats]
+    [isGroupMode, sessionId, currentUser, heldSeats, sessionData, selectedShowtime, showToast, loadSessionSeats]
   );
+
+  const startHoldTimerAction = useCallback(async (): Promise<boolean> => {
+    setIsHoldTimerStarted(true);
+    const expires = new Date(Date.now() + 10 * 60 * 1000);
+    setHoldExpiresAt(expires);
+
+    if (isGroupMode && sessionId) {
+      try {
+        await groupSessionService.startHoldTimer(sessionId, 10);
+        return true;
+      } catch (e) {
+        console.warn('Failed to start hold timer on backend:', e);
+        return false;
+      }
+    }
+    return true;
+  }, [isGroupMode, sessionId]);
 
   const simulateSeatSelection = useCallback(
     async (memberKey: 'minh' | 'an' | 'huy', seats: string[]) => {
@@ -568,12 +851,64 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     huy: Object.values(heldSeats).filter((s) => s.memberName?.toLowerCase().includes('huy')).map((s) => s.seatId),
   };
 
-  const updateComboQty = useCallback((key: string, delta: number) => {
-    setComboQty((prev) => ({
-      ...prev,
-      [key]: Math.max(0, (prev[key] || 0) + delta),
-    }));
-  }, []);
+  const updateComboQty = useCallback(
+    (key: string, delta: number) => {
+      setComboQty((prev) => {
+        const nextQty = Math.max(0, (prev[key] || 0) + delta);
+        const updated = { ...prev, [key]: nextQty };
+
+        // Realtime REST update to backend
+        if (sessionId && currentUser) {
+          const items = Object.entries(updated)
+            .filter(([_, q]) => q > 0)
+            .map(([comboId, quantity]) => ({
+              comboId,
+              quantity,
+              unitPrice: comboPrices[comboId] || 0,
+            }));
+
+          groupSessionService
+            .updateMemberFnB(sessionId, {
+              userId: currentUser.userId,
+              items,
+            })
+            .then((summary) => {
+              setGroupFnBSummary(summary);
+            })
+            .catch((e) => console.warn('Failed to sync F&B update:', e));
+        }
+
+        return updated;
+      });
+    },
+    [sessionId, currentUser, comboPrices]
+  );
+
+  const simulateMemberFnB = useCallback(
+    async (memberName: string, comboId: string, qty: number) => {
+      if (!sessionId || !sessionData) return;
+      const target = sessionData.members.find((m) =>
+        m.name.toLowerCase().includes(memberName.toLowerCase())
+      );
+      if (!target) {
+        showToast(`⚠️ ${memberName} chưa tham gia phòng`);
+        return;
+      }
+
+      try {
+        const items = qty > 0 ? [{ comboId, quantity: qty, unitPrice: comboPrices[comboId] || 0 }] : [];
+        const summary = await groupSessionService.updateMemberFnB(sessionId, {
+          userId: target.user_id,
+          items,
+        });
+        setGroupFnBSummary(summary);
+        showToast(`🥤 ${target.name} đã cập nhật bắp nước!`);
+      } catch (e) {
+        console.warn('Simulation F&B error:', e);
+      }
+    },
+    [sessionId, sessionData, comboPrices, showToast]
+  );
 
   const payForUser = useCallback((userKey: string) => {
     setPayStatus((prev) => {
@@ -583,12 +918,114 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
   }, []);
 
+  const payMyShare = useCallback(
+    async (method: PaymentMethod = 'momo'): Promise<boolean> => {
+      if (!sessionId || !currentUser) return false;
+      try {
+        const resp = await groupSessionService.payMember(sessionId, {
+          userId: currentUser.userId,
+          paymentMethod: method,
+        });
+        showToast(`✓ Bạn đã thanh toán thành công qua ${method.toUpperCase()}!`);
+        await loadPaymentSummaryRef.current();
+        if (resp.data?.isConfirmed) {
+          goTo('screen-confirmed');
+        }
+        return true;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Lỗi thanh toán';
+        showToast(`✕ ${msg}`);
+        return false;
+      }
+    },
+    [sessionId, currentUser, goTo, showToast]
+  );
+
+  const payForMember = useCallback(
+    async (targetUserId: string, method: PaymentMethod = 'momo'): Promise<boolean> => {
+      if (!sessionId || !currentUser) return false;
+      try {
+        const resp = await groupSessionService.payMember(sessionId, {
+          userId: targetUserId,
+          payerUserId: currentUser.userId,
+          paymentMethod: method,
+        });
+        showToast(`✓ Đã thanh toán thành công cho bạn bè qua ${method.toUpperCase()}!`);
+        await loadPaymentSummaryRef.current();
+        if (resp.data?.isConfirmed) {
+          goTo('screen-confirmed');
+        }
+        return true;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Lỗi thanh toán';
+        showToast(`✕ ${msg}`);
+        return false;
+      }
+    },
+    [sessionId, currentUser, goTo, showToast]
+  );
+
+  const payHostAllGroup = useCallback(
+    async (method: PaymentMethod = 'momo'): Promise<boolean> => {
+      if (!sessionId || !currentUser) return false;
+      try {
+        await groupSessionService.payHostAll(sessionId, {
+          hostUserId: currentUser.userId,
+          paymentMethod: method,
+        });
+        showToast(`🎉 Trưởng nhóm đã thanh toán toàn bộ đơn qua ${method.toUpperCase()}!`);
+        await loadPaymentSummaryRef.current();
+        goTo('screen-confirmed');
+        return true;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Lỗi thanh toán gộp';
+        showToast(`✕ ${msg}`);
+        return false;
+      }
+    },
+    [sessionId, currentUser, goTo, showToast]
+  );
+
+  const simulatePayment = useCallback(
+    async (memberName: string, method: PaymentMethod = 'momo') => {
+      if (!sessionId || !sessionData) return;
+      const target = sessionData.members.find((m) =>
+        m.name.toLowerCase().includes(memberName.toLowerCase())
+      );
+      if (!target) {
+        showToast(`⚠️ ${memberName} chưa tham gia phòng`);
+        return;
+      }
+      try {
+        const resp = await groupSessionService.payMember(sessionId, {
+          userId: target.user_id,
+          paymentMethod: method,
+        });
+        showToast(`💳 ${target.name} đã thanh toán thành công (Live API)!`);
+        await loadPaymentSummaryRef.current();
+        if (resp.data?.isConfirmed) {
+          goTo('screen-confirmed');
+        }
+      } catch (e) {
+        console.warn('Simulation payment error:', e);
+      }
+    },
+    [sessionId, sessionData, goTo, showToast]
+  );
+
   const resetToHome = useCallback(() => {
     storageService.clearAll();
+    setBookingMode('SOLO');
     setSessionId(null);
     setInviteCode(null);
     setSessionData(null);
     setHeldSeats({});
+    setGroupFnBSummary(null);
+    setPaymentSummary(null);
+    setShowShareModal(false);
+    setIsHoldTimerStarted(false);
+    setHoldExpiresAt(null);
+    setSoloSeats([]);
     setScreenHistory(['screen-home']);
   }, []);
 
@@ -630,6 +1067,11 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         goTo,
         goBack,
         screenHistory,
+        bookingMode,
+        setBookingMode,
+        isGroupMode,
+        startSoloBooking,
+        clearGroupSession,
         currentUser,
         setCurrentUser,
         sessionId,
@@ -643,8 +1085,14 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         isBackendHealthy,
         isPollingActive,
         realtimeStatus,
+        showShareModal,
+        setShowShareModal,
+        isHoldTimerStarted,
+        holdExpiresAt,
+        startHoldTimerAction,
         createGroup,
         joinGroup,
+        leaveGroup,
         simulateMemberJoin,
         refreshSessionData,
         resetToHome,
@@ -657,9 +1105,18 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         comboQty,
         updateComboQty,
         comboPrices,
+        groupFnBSummary,
+        loadSessionFnB,
+        simulateMemberFnB,
         payStatus,
         paidCount,
         payForUser,
+        paymentSummary,
+        loadPaymentSummary,
+        payMyShare,
+        payForMember,
+        payHostAllGroup,
+        simulatePayment,
       }}
     >
       {children}

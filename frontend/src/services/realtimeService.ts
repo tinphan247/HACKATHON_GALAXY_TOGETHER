@@ -10,6 +10,15 @@ export interface RealtimeEvent {
     | 'GROUP_CANCELLED'
     | 'SEAT_HELD'
     | 'SEAT_RELEASED'
+    | 'HOLD_TIMER_STARTED'
+    | 'GROUP_MEMBER_SEAT_SELECTED'
+    | 'GROUP_MEMBER_SEAT_RELEASED'
+    | 'GROUP_MEMBER_PAYMENT_COMPLETED'
+    | 'GROUP_MEMBER_BOOKING_CONFIRMED'
+    | 'GROUP_SESSION_EXPIRED'
+    | 'FNB_UPDATED'
+    | 'PAYMENT_UPDATED'
+    | 'SESSION_CONFIRMED'
     | 'CONNECTED'
     | 'SUBSCRIBED'
     | 'PONG';
@@ -18,6 +27,7 @@ export interface RealtimeEvent {
     member?: GroupMemberResponse;
     isNew?: boolean;
     userId?: string;
+    payerUserId?: string;
     actorUserId?: string;
     session?: unknown;
     seatId?: string;
@@ -26,6 +36,25 @@ export interface RealtimeEvent {
     memberName?: string;
     colorKey?: string;
     colorHex?: string;
+    colorSlot?: string;
+    // Hold Timer payload
+    expiresAt?: string;
+    startedAt?: string;
+    seatHoldStartedAt?: string;
+    seatHoldExpiresAt?: string;
+    durationMinutes?: number;
+    remainingSeconds?: number;
+    // F&B Summary payload
+    totalGroupAmount?: number;
+    totalGroupItemsCount?: number;
+    members?: unknown[];
+    aggregatedItems?: unknown[];
+    // Payment payload
+    amount?: number;
+    paymentMethod?: string;
+    isAllPaid?: boolean;
+    isConfirmed?: boolean;
+    summary?: unknown;
   };
   timestamp?: string;
 }

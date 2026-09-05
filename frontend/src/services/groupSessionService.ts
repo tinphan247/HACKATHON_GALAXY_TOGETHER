@@ -123,4 +123,80 @@ export const groupSessionService = {
       }
     );
   },
+
+  /**
+   * Get Group F&B Summary (Anti-duplication)
+   */
+  async getSessionFnB(sessionId: string) {
+    return apiClient<any>(`/api/group-sessions/${sessionId}/fnb`, {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Update individual member F&B
+   */
+  async updateMemberFnB(
+    sessionId: string,
+    req: { userId: string; items: Array<{ comboId: string; comboName?: string; quantity: number; unitPrice?: number }> }
+  ) {
+    return apiClient<any>(`/api/group-sessions/${sessionId}/fnb`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  },
+
+  /**
+   * Get full session payment summary (Server-authoritative)
+   */
+  async getPaymentSummary(sessionId: string) {
+    return apiClient<any>(`/api/group-sessions/${sessionId}/payments`, {
+      method: 'GET',
+    });
+  },
+
+  /**
+   * Pay for individual member (Split-Pay)
+   */
+  async payMember(
+    sessionId: string,
+    req: { userId: string; paymentMethod?: string; payerUserId?: string }
+  ) {
+    return apiClient<any>(`/api/group-sessions/${sessionId}/payments/member`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  },
+
+  /**
+   * Host pays for entire group (Host-Pays)
+   */
+  async payHostAll(
+    sessionId: string,
+    req: { hostUserId: string; paymentMethod?: string }
+  ) {
+    return apiClient<any>(`/api/group-sessions/${sessionId}/payments/host-all`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  },
+
+  /**
+   * Start seat hold countdown timer when user clicks 'Tiếp tục' in SeatSelectionScreen
+   */
+  async startHoldTimer(sessionId: string, durationMinutes = 10) {
+    return apiClient<{
+      sessionId: string;
+      seatHoldStartedAt: string;
+      seatHoldExpiresAt: string;
+      durationMinutes: number;
+      remainingSeconds: number;
+      status: string;
+    }>(`/api/group-sessions/${sessionId}/checkout`, {
+      method: 'POST',
+      body: JSON.stringify({ durationMinutes }),
+    });
+  },
 };
+
+

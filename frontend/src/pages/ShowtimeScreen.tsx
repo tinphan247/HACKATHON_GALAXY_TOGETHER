@@ -4,16 +4,17 @@ import { StatusBar } from '../components/common/StatusBar';
 import { Header } from '../components/common/Header';
 
 export const ShowtimeScreen: React.FC = () => {
-  const { goTo, goBack, selectedShowtime, setSelectedShowtime } = useGroupSession();
+  const { goTo, goBack, selectedShowtime, startSoloBooking } = useGroupSession();
   const [selectedTime, setSelectedTime] = useState(selectedShowtime.showTime || '21:00');
   const [isAccordionOpen, setIsAccordionOpen] = useState(true);
 
   const handleSelectTime = (time: string) => {
     setSelectedTime(time);
-    setSelectedShowtime({
-      ...selectedShowtime,
+    console.log('[Showtime] user selected time:', time, '-> entering SOLO seat selection');
+    startSoloBooking({
       showTime: time,
     });
+    goTo('screen-seats');
   };
 
   const showtimes = [
@@ -143,32 +144,6 @@ export const ShowtimeScreen: React.FC = () => {
                     {t}
                   </div>
                 ))}
-              </div>
-
-              {/* Galaxy Together Callout Box */}
-              <div
-                style={{
-                  background: 'linear-gradient(135deg, #FFF7F0, #FFE8D0)',
-                  border: '1.5px solid var(--orange)',
-                  borderRadius: 'var(--r)',
-                  padding: 12,
-                  marginBottom: 10,
-                }}
-              >
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--orange)', marginBottom: 6 }}>
-                  🎬 GALAXY TOGETHER
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 10 }}>
-                  Suất {selectedTime} • Bạn có muốn đi cùng nhóm?
-                </div>
-                <div className="session-cta-row" style={{ padding: 0 }}>
-                  <button className="cta-group cta-solo" onClick={() => goTo('screen-seats')}>
-                    Đặt một mình
-                  </button>
-                  <button className="cta-group cta-together" onClick={() => goTo('screen-create-group')}>
-                    👥 Tạo nhóm xem phim
-                  </button>
-                </div>
               </div>
             </div>
           )}

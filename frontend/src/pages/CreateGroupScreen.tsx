@@ -5,7 +5,7 @@ import { Header } from '../components/common/Header';
 import type { PaymentMode } from '../types/session';
 
 export const CreateGroupScreen: React.FC = () => {
-  const { goTo, goBack, selectedShowtime, createGroup, currentUser } = useGroupSession();
+  const { goBack, selectedShowtime, createGroup, currentUser } = useGroupSession();
 
   const [hostName, setHostName] = useState(currentUser?.name || 'Tín Phan');
   const [groupName, setGroupName] = useState('Friday Movie Night');
@@ -34,9 +34,7 @@ export const CreateGroupScreen: React.FC = () => {
     const success = await createGroup(groupName, memberCount, payMode, hostName.trim());
     setIsSubmitting(false);
 
-    if (success) {
-      goTo('screen-invite');
-    } else {
+    if (!success) {
       setErrorMessage('Không thể tạo nhóm. Vui lòng thử lại.');
     }
   };
@@ -44,7 +42,7 @@ export const CreateGroupScreen: React.FC = () => {
   return (
     <div className="screen">
       <StatusBar />
-      <Header title="Tạo nhóm xem phim" onBack={goBack} />
+      <Header title="Xác nhận tạo nhóm" onBack={goBack} />
 
       <div className="body">
         {/* Movie Info Card */}

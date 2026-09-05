@@ -446,7 +446,7 @@ export class SessionService {
 
       // 2. Find member
       const memberRes = await client.query(
-        "SELECT id, name, role, (role = 'host') as is_host FROM group_members WHERE group_session_id = $1 AND user_id = $2 AND status != $3",
+        "SELECT id, name, role, color_slot, (role = 'host') as is_host FROM group_members WHERE group_session_id = $1 AND user_id = $2 AND status != $3",
         [sessionId, userId, 'LEFT']
       );
       if (memberRes.rows.length === 0) {
@@ -475,12 +475,27 @@ export class SessionService {
             memberId: member.id,
             memberName: member.name,
             userId,
+            colorSlot: member.color_slot,
             isNew: false
           };
         }
         const error = new Error(`Ghế ${seatCode || seatId} vừa được người khác chọn`);
         error.statusCode = 409;
         throw error;
+      }
+
+      // 3.5 Check if member already has another held seat in this session and release it (swapping seat)
+      const prevHoldRes = await client.query(
+        `SELECT id, seat_id, seat_code FROM seat_holds WHERE group_session_id = $1 AND group_member_id = $2 AND status = 'held' AND seat_id != $3`,
+        [sessionId, member.id, seatId]
+      );
+      let releasedSeatId = null;
+      if (prevHoldRes.rows.length > 0) {
+        releasedSeatId = prevHoldRes.rows[0].seat_id;
+        await client.query(
+          `UPDATE seat_holds SET status = 'released' WHERE id = $1`,
+          [prevHoldRes.rows[0].id]
+        );
       }
 
       // 4. Insert seat hold
@@ -513,7 +528,73 @@ export class SessionService {
         memberId: member.id,
         memberName: member.name,
         userId,
+        colorSlot: member.color_slot,
+        releasedSeatId,
         isNew: true
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      if (err.code === '23505') {
+        const conflictErr = new Error(`Ghế ${seatCode || seatId} vừa được người khác chọn`);
+        conflictErr.statusCode = 409;
+        throw conflictErr;
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Start seat hold countdown timer when user clicks 'Tiếp tục' in SeatSelectionScreen
+   */
+  static async startSeatHoldTimer(sessionId, durationMinutes = 10) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const sessionRes = await client.query(
+        'SELECT id, status, seat_hold_started_at, seat_hold_expires_at FROM group_sessions WHERE id = $1 FOR UPDATE',
+        [sessionId]
+      );
+
+      if (sessionRes.rows.length === 0) {
+        const error = new Error('Session not found');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + durationMinutes * 60 * 1000);
+
+      const updateSessionQuery = `
+        UPDATE group_sessions
+        SET seat_hold_started_at = COALESCE(seat_hold_started_at, $1),
+            seat_hold_expires_at = $2,
+            expires_at = $2,
+            status = CASE WHEN status IN ('CREATED', 'WAITING_FOR_MEMBERS', 'SELECTING') THEN 'PAYMENT' ELSE status END,
+            updated_at = NOW()
+        WHERE id = $3
+        RETURNING *;
+      `;
+      const updatedRes = await client.query(updateSessionQuery, [now, expiresAt, sessionId]);
+
+      // Also update expires_at on active held seats
+      await client.query(
+        `UPDATE seat_holds SET expires_at = $1 WHERE group_session_id = $2 AND status = 'held'`,
+        [expiresAt, sessionId]
+      );
+
+      await client.query('COMMIT');
+
+      const updated = updatedRes.rows[0];
+      return {
+        sessionId,
+        seatHoldStartedAt: updated.seat_hold_started_at,
+        seatHoldExpiresAt: updated.seat_hold_expires_at,
+        durationMinutes,
+        remainingSeconds: Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 1000)),
+        status: updated.status,
       };
     } catch (err) {
       await client.query('ROLLBACK');
@@ -571,7 +652,7 @@ export class SessionService {
   static async getSessionSeats(sessionId) {
     const res = await pool.query(
       `SELECT sh.id, sh.seat_id, sh.seat_code, sh.seat_type, sh.price, sh.status,
-              gm.id as member_id, gm.user_id, gm.name as member_name, gm.role,
+              gm.id as member_id, gm.user_id, gm.name as member_name, gm.role, gm.color_slot,
               (gm.role = 'host') as is_host
        FROM seat_holds sh
        JOIN group_members gm ON sh.group_member_id = gm.id
@@ -581,5 +662,590 @@ export class SessionService {
     );
 
     return res.rows;
+  }
+
+  /**
+   * Standard F&B Catalog for Galaxy Cinema
+   */
+  static getFnBCatalog() {
+    return [
+      { id: 'c1', name: 'Combo 1 Big Extra', desc: '1 Bắp Ngọt 60oz + 1 Nước ngọt có gas 32oz', icon: '🍿', price: 115000 },
+      { id: 'c2', name: 'Combo 2 Big Extra', desc: '1 Bắp Ngọt 60oz + 2 Nước ngọt có gas 32oz', icon: '🥤', price: 134000 },
+      { id: 'c3', name: 'Combo Phô Mai', desc: '1 Bắp Phô Mai 60oz + 2 Nước ngọt 32oz', icon: '🧀', price: 149000 },
+      { id: 'c4', name: 'Combo Nhóm 4 Người', desc: '2 Bắp Lớn + 4 Nước 32oz + 1 Snack', icon: '🎉', price: 229000 },
+    ];
+  }
+
+  /**
+   * Update individual member F&B selection
+   */
+  static async updateMemberFnB(sessionId, { userId, items }) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. Verify member
+      const memberRes = await client.query(
+        "SELECT id, name, role, color_slot FROM group_members WHERE group_session_id = $1 AND user_id = $2 AND status != 'LEFT'",
+        [sessionId, userId]
+      );
+      if (memberRes.rows.length === 0) {
+        const error = new Error('Member not found in session');
+        error.statusCode = 404;
+        throw error;
+      }
+      const member = memberRes.rows[0];
+
+      // 2. Find or create draft fnb_order
+      let orderRes = await client.query(
+        "SELECT id, total_amount FROM fnb_orders WHERE group_session_id = $1 AND group_member_id = $2 AND status = 'draft'",
+        [sessionId, member.id]
+      );
+
+      let orderId;
+      if (orderRes.rows.length > 0) {
+        orderId = orderRes.rows[0].id;
+        // Clear previous items
+        await client.query('DELETE FROM fnb_order_items WHERE fnb_order_id = $1', [orderId]);
+      } else {
+        orderId = crypto.randomUUID();
+        await client.query(
+          "INSERT INTO fnb_orders (id, group_session_id, group_member_id, total_amount, status) VALUES ($1, $2, $3, 0, 'draft')",
+          [orderId, sessionId, member.id]
+        );
+      }
+
+      // Catalog lookup for server-side price validation
+      const catalog = this.getFnBCatalog().reduce((acc, cur) => {
+        acc[cur.id] = cur;
+        return acc;
+      }, {});
+
+      // 3. Insert new items and compute total
+      let totalAmount = 0;
+      if (Array.isArray(items) && items.length > 0) {
+        for (const item of items) {
+          const qty = parseInt(item.quantity, 10);
+          if (qty > 0) {
+            const catalogItem = catalog[item.comboId];
+            const unitPrice = catalogItem ? catalogItem.price : Number(item.unitPrice || 0);
+            const comboName = catalogItem ? catalogItem.name : (item.comboName || item.comboId);
+            const subtotal = qty * unitPrice;
+            totalAmount += subtotal;
+
+            const itemId = crypto.randomUUID();
+            await client.query(
+              `INSERT INTO fnb_order_items (id, fnb_order_id, combo_id, combo_name, quantity, unit_price, subtotal)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+              [itemId, orderId, item.comboId, comboName, qty, unitPrice, subtotal]
+            );
+          }
+        }
+      }
+
+      // 4. Update order total
+      await client.query(
+        'UPDATE fnb_orders SET total_amount = $1, updated_at = NOW() WHERE id = $2',
+        [totalAmount, orderId]
+      );
+
+      await client.query('COMMIT');
+
+      // Return full session F&B summary
+      return await this.getSessionFnBSummary(sessionId);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Get Group F&B Summary (Anti-duplication aggregate)
+   */
+  static async getSessionFnBSummary(sessionId) {
+    const rows = await pool.query(
+      `SELECT gm.id as member_id, gm.user_id, gm.name as member_name, gm.role, gm.color_slot,
+              (gm.role = 'host') as is_host,
+              fo.id as order_id, fo.total_amount, fo.status as order_status,
+              foi.id as item_id, foi.combo_id, foi.combo_name, foi.quantity, foi.unit_price, foi.subtotal
+       FROM group_members gm
+       LEFT JOIN fnb_orders fo ON fo.group_session_id = gm.group_session_id AND fo.group_member_id = gm.id AND fo.status IN ('draft', 'submitted', 'paid')
+       LEFT JOIN fnb_order_items foi ON foi.fnb_order_id = fo.id
+       WHERE gm.group_session_id = $1 AND gm.status != 'LEFT'
+       ORDER BY gm.joined_at ASC, foi.created_at ASC`,
+      [sessionId]
+    );
+
+    const membersMap = new Map();
+    const aggregateMap = new Map();
+    let totalGroupAmount = 0;
+    let totalGroupItemsCount = 0;
+
+    for (const r of rows.rows) {
+      if (!membersMap.has(r.member_id)) {
+        membersMap.set(r.member_id, {
+          memberId: r.member_id,
+          userId: r.user_id,
+          memberName: r.member_name,
+          role: r.role,
+          colorSlot: r.color_slot,
+          isHost: r.is_host,
+          orderId: r.order_id || null,
+          totalAmount: Number(r.total_amount || 0),
+          items: [],
+        });
+      }
+
+      if (r.item_id && r.quantity > 0) {
+        const member = membersMap.get(r.member_id);
+        const itemObj = {
+          itemId: r.item_id,
+          comboId: r.combo_id,
+          comboName: r.combo_name,
+          quantity: Number(r.quantity),
+          unitPrice: Number(r.unit_price),
+          subtotal: Number(r.subtotal),
+        };
+        member.items.push(itemObj);
+
+        // Aggregate across group
+        totalGroupItemsCount += Number(r.quantity);
+        if (!aggregateMap.has(r.combo_id)) {
+          aggregateMap.set(r.combo_id, {
+            comboId: r.combo_id,
+            comboName: r.combo_name,
+            totalQuantity: 0,
+            unitPrice: Number(r.unit_price),
+            subtotal: 0,
+          });
+        }
+        const agg = aggregateMap.get(r.combo_id);
+        agg.totalQuantity += Number(r.quantity);
+        agg.subtotal += Number(r.subtotal);
+      }
+    }
+
+    const membersList = Array.from(membersMap.values());
+    for (const m of membersList) {
+      totalGroupAmount += m.totalAmount;
+    }
+
+    return {
+      sessionId,
+      totalGroupAmount,
+      totalGroupItemsCount,
+      members: membersList,
+      aggregatedItems: Array.from(aggregateMap.values()),
+    };
+  }
+
+  /**
+   * Calculate full payment breakdown for session (Server-Authoritative)
+   */
+  static async calculateSessionPaymentSummary(sessionId) {
+    const sessionRes = await pool.query(
+      'SELECT id, name, status, payment_mode, expires_at, host_user_id FROM group_sessions WHERE id = $1',
+      [sessionId]
+    );
+    if (sessionRes.rows.length === 0) {
+      const error = new Error('Session not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    const session = sessionRes.rows[0];
+
+    // 1. Get members
+    const membersRes = await pool.query(
+      "SELECT id, user_id, name, role, color_slot, status FROM group_members WHERE group_session_id = $1 AND status != 'LEFT' ORDER BY joined_at ASC",
+      [sessionId]
+    );
+    const members = membersRes.rows;
+
+    // 2. Get seats
+    const seatsRes = await pool.query(
+      "SELECT id, seat_id, seat_code, price, group_member_id FROM seat_holds WHERE group_session_id = $1 AND status IN ('held', 'sold')",
+      [sessionId]
+    );
+    const seats = seatsRes.rows;
+
+    // 3. Get F&B orders & items
+    const fnbRes = await pool.query(
+      `SELECT fo.group_member_id, fo.total_amount as order_total, foi.combo_id, foi.combo_name, foi.quantity, foi.unit_price, foi.subtotal
+       FROM fnb_orders fo
+       LEFT JOIN fnb_order_items foi ON foi.fnb_order_id = fo.id
+       WHERE fo.group_session_id = $1 AND fo.status IN ('draft', 'submitted', 'paid')`,
+      [sessionId]
+    );
+
+    // 4. Get payments
+    const paymentsRes = await pool.query(
+      "SELECT id, group_member_id, amount, payment_method, gateway_ref, status, paid_at FROM payments WHERE group_session_id = $1 AND status = 'success'",
+      [sessionId]
+    );
+    const payments = paymentsRes.rows;
+
+    // Group F&B by member
+    const fnbMap = new Map();
+    for (const r of fnbRes.rows) {
+      if (!fnbMap.has(r.group_member_id)) {
+        fnbMap.set(r.group_member_id, {
+          totalAmount: Number(r.order_total || 0),
+          items: [],
+        });
+      }
+      if (r.combo_id) {
+        fnbMap.get(r.group_member_id).items.push({
+          comboId: r.combo_id,
+          comboName: r.combo_name,
+          quantity: Number(r.quantity),
+          unitPrice: Number(r.unit_price),
+          subtotal: Number(r.subtotal),
+        });
+      }
+    }
+
+    // Group payments by member
+    const paymentMap = new Map();
+    let hostGroupPayment = null;
+    for (const p of payments) {
+      if (p.group_member_id) {
+        paymentMap.set(p.group_member_id, p);
+      } else {
+        hostGroupPayment = p;
+      }
+    }
+
+    // Build member breakdowns
+    let totalSessionAmount = 0;
+    let paidMembersCount = 0;
+
+    const memberBreakdowns = members.map((m) => {
+      const memberSeats = seats.filter((s) => s.group_member_id === m.id);
+      const seatAmount = memberSeats.reduce((sum, s) => sum + Number(s.price || 55000), 0);
+      const memberFnb = fnbMap.get(m.id) || { totalAmount: 0, items: [] };
+      const fnbAmount = memberFnb.totalAmount;
+      const memberTotal = seatAmount + fnbAmount;
+      totalSessionAmount += memberTotal;
+
+      const memberPayment = paymentMap.get(m.id) || hostGroupPayment;
+      const isPaid = m.status === 'PAID' || m.status === 'CONFIRMED' || !!memberPayment || session.status === 'CONFIRMED';
+
+      if (isPaid) {
+        paidMembersCount++;
+      }
+
+      return {
+        memberId: m.id,
+        userId: m.user_id,
+        memberName: m.name,
+        role: m.role,
+        colorSlot: m.color_slot,
+        status: m.status,
+        isHost: m.role === 'host',
+        seats: memberSeats.map((s) => ({
+          id: s.id,
+          seatId: s.seat_id,
+          seatCode: s.seat_code,
+          price: Number(s.price || 55000),
+        })),
+        seatAmount,
+        fnbItems: memberFnb.items,
+        fnbAmount,
+        totalAmount: memberTotal,
+        isPaid,
+        payment: memberPayment
+          ? {
+              id: memberPayment.id,
+              amount: Number(memberPayment.amount),
+              paymentMethod: memberPayment.payment_method,
+              gatewayRef: memberPayment.gateway_ref,
+              paidAt: memberPayment.paid_at,
+            }
+          : null,
+      };
+    });
+
+    const isAllPaid = members.length > 0 && paidMembersCount >= members.length;
+
+    return {
+      sessionId: session.id,
+      sessionName: session.name,
+      sessionStatus: session.status,
+      paymentMode: session.payment_mode,
+      hostUserId: session.host_user_id,
+      totalSessionAmount,
+      totalMembers: members.length,
+      paidMembersCount,
+      isAllPaid,
+      isConfirmed: session.status === 'CONFIRMED',
+      members: memberBreakdowns,
+    };
+  }
+
+  /**
+   * Process payment for an individual member (Split-Pay)
+   */
+  static async processMemberPayment(sessionId, { userId, paymentMethod = 'momo', payerUserId }) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. Verify session
+      const sessionRes = await client.query(
+        'SELECT id, status, payment_mode, host_user_id FROM group_sessions WHERE id = $1 FOR UPDATE',
+        [sessionId]
+      );
+      if (sessionRes.rows.length === 0) {
+        const err = new Error('Session not found');
+        err.statusCode = 404;
+        throw err;
+      }
+      const session = sessionRes.rows[0];
+
+      // 2. Verify member
+      const memberRes = await client.query(
+        "SELECT id, name, role, color_slot, status FROM group_members WHERE group_session_id = $1 AND user_id = $2 AND status != 'LEFT'",
+        [sessionId, userId]
+      );
+      if (memberRes.rows.length === 0) {
+        const err = new Error('Member not found in session');
+        err.statusCode = 404;
+        throw err;
+      }
+      const member = memberRes.rows[0];
+
+      // 3. Compute member amount (Server-authoritative)
+      const seatsRes = await client.query(
+        "SELECT price FROM seat_holds WHERE group_session_id = $1 AND group_member_id = $2 AND status IN ('held', 'sold')",
+        [sessionId, member.id]
+      );
+      const seatTotal = seatsRes.rows.reduce((sum, s) => sum + Number(s.price || 55000), 0);
+
+      const fnbRes = await client.query(
+        "SELECT total_amount FROM fnb_orders WHERE group_session_id = $1 AND group_member_id = $2 AND status IN ('draft', 'submitted', 'paid')",
+        [sessionId, member.id]
+      );
+      const fnbTotal = fnbRes.rows.reduce((sum, f) => sum + Number(f.total_amount || 0), 0);
+
+      const memberTotal = seatTotal + fnbTotal;
+
+      // 4. Check if already paid (idempotent)
+      const existingPayRes = await client.query(
+        "SELECT id, amount, payment_method, gateway_ref, paid_at FROM payments WHERE group_session_id = $1 AND group_member_id = $2 AND status = 'success'",
+        [sessionId, member.id]
+      );
+      if (existingPayRes.rows.length > 0) {
+        await client.query('COMMIT');
+        const summary = await this.calculateSessionPaymentSummary(sessionId);
+        return {
+          success: true,
+          isNew: false,
+          payment: existingPayRes.rows[0],
+          isAllPaid: summary.isAllPaid,
+          isConfirmed: summary.isConfirmed,
+          summary,
+        };
+      }
+
+      // 5. Insert payment record
+      const paymentId = crypto.randomUUID();
+      const subOrderId = `SUB_GLX_${Date.now()}_${member.color_slot || 'm1'}`;
+      const gatewayRef = `TRANS_${paymentMethod.toUpperCase()}_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
+
+      await client.query(
+        `INSERT INTO payments (
+          id, group_session_id, group_member_id, sub_order_id, amount,
+          payment_method, gateway_ref, status, paid_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'success', NOW())`,
+        [paymentId, sessionId, member.id, subOrderId, memberTotal, paymentMethod, gatewayRef]
+      );
+
+      // 6. Update member status to PAID
+      await client.query(
+        "UPDATE group_members SET status = 'PAID', sub_order_id = $1, updated_at = NOW() WHERE id = $2",
+        [subOrderId, member.id]
+      );
+
+      // 7. Update member's F&B orders to paid
+      await client.query(
+        "UPDATE fnb_orders SET status = 'paid', sub_order_id = $1, updated_at = NOW() WHERE group_session_id = $2 AND group_member_id = $3",
+        [subOrderId, sessionId, member.id]
+      );
+
+      // 8. Check if all members are now PAID
+      const unpaidCountRes = await client.query(
+        "SELECT count(*) FROM group_members WHERE group_session_id = $1 AND status NOT IN ('PAID', 'CONFIRMED') AND status != 'LEFT'",
+        [sessionId]
+      );
+      const unpaidCount = parseInt(unpaidCountRes.rows[0].count, 10);
+      const isAllPaid = unpaidCount === 0;
+
+      if (isAllPaid) {
+        // Confirm entire session
+        await client.query(
+          "UPDATE group_sessions SET status = 'CONFIRMED', updated_at = NOW() WHERE id = $1",
+          [sessionId]
+        );
+        // Mark all held seats as sold
+        await client.query(
+          "UPDATE seat_holds SET status = 'sold' WHERE group_session_id = $1 AND status = 'held'",
+          [sessionId]
+        );
+        // Create or update group_bookings
+        const totalSessionRes = await client.query(
+          "SELECT sum(amount) as total FROM payments WHERE group_session_id = $1 AND status = 'success'",
+          [sessionId]
+        );
+        const bookingTotal = Number(totalSessionRes.rows[0].total || memberTotal);
+        const bookingId = crypto.randomUUID();
+        await client.query(
+          `INSERT INTO group_bookings (id, group_session_id, total_amount, status)
+           VALUES ($1, $2, $3, 'confirmed')
+           ON CONFLICT (group_session_id) DO UPDATE SET total_amount = $3, status = 'confirmed'`,
+          [bookingId, sessionId, bookingTotal]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      const summary = await this.calculateSessionPaymentSummary(sessionId);
+
+      return {
+        success: true,
+        isNew: true,
+        payment: {
+          id: paymentId,
+          amount: memberTotal,
+          paymentMethod,
+          gatewayRef,
+          paidAt: new Date().toISOString(),
+        },
+        memberId: member.id,
+        memberName: member.name,
+        userId,
+        payerUserId: payerUserId || userId,
+        isAllPaid: summary.isAllPaid,
+        isConfirmed: summary.isConfirmed,
+        summary,
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Process host payment for entire group (Host-Pays)
+   */
+  static async processHostPaysAll(sessionId, { hostUserId, paymentMethod = 'momo' }) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. Verify session & host
+      const sessionRes = await client.query(
+        'SELECT id, status, host_user_id, name FROM group_sessions WHERE id = $1 FOR UPDATE',
+        [sessionId]
+      );
+      if (sessionRes.rows.length === 0) {
+        const err = new Error('Session not found');
+        err.statusCode = 404;
+        throw err;
+      }
+      const session = sessionRes.rows[0];
+      if (session.host_user_id !== hostUserId) {
+        const err = new Error('Unauthorized: Only Host can pay for the entire group');
+        err.statusCode = 403;
+        throw err;
+      }
+
+      // 2. Compute total for all members (seats + fnb)
+      const seatsRes = await client.query(
+        "SELECT sum(price) as seat_sum FROM seat_holds WHERE group_session_id = $1 AND status IN ('held', 'sold')",
+        [sessionId]
+      );
+      const seatTotal = Number(seatsRes.rows[0].seat_sum || 0);
+
+      const fnbRes = await client.query(
+        "SELECT sum(total_amount) as fnb_sum FROM fnb_orders WHERE group_session_id = $1 AND status IN ('draft', 'submitted', 'paid')",
+        [sessionId]
+      );
+      const fnbTotal = Number(fnbRes.rows[0].fnb_sum || 0);
+
+      const totalAmount = seatTotal + fnbTotal;
+
+      // 3. Insert single payment row for entire group
+      const paymentId = crypto.randomUUID();
+      const subOrderId = `HOST_GLX_${Date.now()}`;
+      const gatewayRef = `TRANS_HOST_${paymentMethod.toUpperCase()}_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
+
+      await client.query(
+        `INSERT INTO payments (
+          id, group_session_id, group_member_id, sub_order_id, amount,
+          payment_method, gateway_ref, status, paid_at
+        ) VALUES ($1, $2, NULL, $3, $4, $5, $6, 'success', NOW())`,
+        [paymentId, sessionId, subOrderId, totalAmount, paymentMethod, gatewayRef]
+      );
+
+      // 4. Mark all members as PAID
+      await client.query(
+        "UPDATE group_members SET status = 'PAID', sub_order_id = $1, updated_at = NOW() WHERE group_session_id = $2 AND status != 'LEFT'",
+        [subOrderId, sessionId]
+      );
+
+      // 5. Mark session as CONFIRMED
+      await client.query(
+        "UPDATE group_sessions SET status = 'CONFIRMED', updated_at = NOW() WHERE id = $1",
+        [sessionId]
+      );
+
+      // 6. Mark all seats as sold
+      await client.query(
+        "UPDATE seat_holds SET status = 'sold' WHERE group_session_id = $1 AND status = 'held'",
+        [sessionId]
+      );
+
+      // 7. Mark all F&B as paid
+      await client.query(
+        "UPDATE fnb_orders SET status = 'paid', sub_order_id = $1, updated_at = NOW() WHERE group_session_id = $2",
+        [subOrderId, sessionId]
+      );
+
+      // 8. Create group_booking
+      const bookingId = crypto.randomUUID();
+      await client.query(
+        `INSERT INTO group_bookings (id, group_session_id, total_amount, status)
+         VALUES ($1, $2, $3, 'confirmed')
+         ON CONFLICT (group_session_id) DO UPDATE SET total_amount = $3, status = 'confirmed'`,
+        [bookingId, sessionId, totalAmount]
+      );
+
+      await client.query('COMMIT');
+
+      const summary = await this.calculateSessionPaymentSummary(sessionId);
+
+      return {
+        success: true,
+        payment: {
+          id: paymentId,
+          amount: totalAmount,
+          paymentMethod,
+          gatewayRef,
+          paidAt: new Date().toISOString(),
+        },
+        isAllPaid: true,
+        isConfirmed: true,
+        summary,
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 }

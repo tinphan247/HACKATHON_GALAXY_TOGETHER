@@ -119,6 +119,11 @@ class RealtimeGateway {
           });
         }
         break;
+      case 'FNB_UPDATE':
+        if (ws.sessionId) {
+          this.broadcast(ws.sessionId, 'FNB_UPDATED', message.payload || message.summary);
+        }
+        break;
       case 'PING':
         this.sendTo(ws, { type: 'PONG', timestamp: new Date().toISOString() });
         break;

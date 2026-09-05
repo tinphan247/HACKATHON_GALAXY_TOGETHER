@@ -13,3 +13,11 @@ export function getMemberColor(index: number): { key: MemberColorKey; hex: strin
   const key = MEMBER_SLOT_COLORS[index % MEMBER_SLOT_COLORS.length];
   return { key, hex: MEMBER_COLORS[key].hex };
 }
+
+export function getMemberColorByKey(key?: string): { key: MemberColorKey; hex: string } {
+  if (key && key in MEMBER_COLORS) {
+    const validKey = key as MemberColorKey;
+    return { key: validKey, hex: MEMBER_COLORS[validKey].hex };
+  }
+  return { key: 'm1', hex: MEMBER_COLORS.m1.hex };
+}

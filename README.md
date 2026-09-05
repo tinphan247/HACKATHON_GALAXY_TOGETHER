@@ -53,11 +53,16 @@ galaxy together/
 │   └── vite.config.ts
 │
 ├── docs/                           # Chi tiết báo cáo kỹ thuật các phase
+│   ├── KE_HOACH_TRIEN_KHAI_TOAN_DIEN_CAC_PHASE.md # Kế hoạch tổng thể 12 Phase từ đầu dự án
+│   ├── TONG_KET_TIEN_DO_PHASE_0_DEN_4.md # Báo cáo tổng hợp toàn diện Phase 0 -> 4
 │   ├── phase_0_discovery_report.md
 │   ├── phase_1_domain_and_database_foundation.md
 │   ├── phase_2_group_session_backend_api.md
 │   ├── phase_3_group_session_frontend.md
-│   └── phase_4_realtime_collaboration.md
+│   ├── phase_4_realtime_collaboration.md
+│   ├── phase_5_shared_seat_booking.md
+│   ├── phase_6_individual_fnb.md
+│   └── phase_7_payment_orchestration.md
 │
 ├── files/                          # Thiết kế gốc & Prototype ban đầu
 │   ├── GALAXY_TOGETHER_DESIGN_CONCEPT.md
@@ -77,10 +82,10 @@ galaxy together/
 - [x] **Phase 2 — Group Session Backend API:** Xây dựng REST API tạo nhóm, mời bạn bè bằng mã QR/Code 6 ký tự, tham gia, rời phòng và phân quyền Host kết nối Neon PostgreSQL (Vượt qua **13/13 integration tests**).
 - [x] **Phase 3 — Group Session Frontend:** Chuyển đổi prototype sang ứng dụng **React + TypeScript + Vite** hoàn chỉnh, kết nối REST API thực tế, mã QR scannable thật, Deep link `?join=GTH-XXX`, Polling Lobby 2s và Simulation Bar gọi API thật.
 - [x] **Phase 4 — Realtime Collaboration:** Hạ tầng WebSocket Server (`/ws`) và Room pub/sub hai chiều, đồng bộ thành viên tức thì (< 100ms), tự động kết nối lại (Auto-reconnect) và REST state reconciliation.
-- [ ] **Phase 5 — Shared Seat Booking:** Sơ đồ ghế realtime và xử lý tranh chấp ghế.
-- [ ] **Phase 6 — Individual F&B:** Giỏ hàng bắp nước riêng và bảng tổng hợp nhóm.
-- [ ] **Phase 7 — Payment Orchestration:** Tích hợp Split-Pay & Host-Pays với cổng thanh toán.
-- [ ] **Phase 8 — Ticket & Confirmation:** Xuất vé điện tử riêng cho từng thành viên.
+- [x] **Phase 5 — Shared Seat Booking:** Sơ đồ ghế realtime, xử lý tranh chấp ghế đồng thời (409 Conflict), PostgreSQL atomic locking với `uq_active_seat_hold` (Vượt qua **7/7 concurrency tests**).
+- [x] **Phase 6 — Individual F&B:** Giỏ hàng bắp nước riêng cho từng cá nhân, bảng tổng hợp F&B nhóm chống mua trùng thời gian thực qua WebSocket `FNB_UPDATED` (Vượt qua **28/28 integration tests**).
+- [x] **Phase 7 — Payment Orchestration:** Tính toán giá server-authoritative, hỗ trợ Split-Pay cá nhân (MoMo, ZaloPay, VNPAY, Thẻ), Host-Pays-All, trả hộ bạn (Host bailout), tự động chuyển ghế sang 'sold' và xác nhận đơn hàng Realtime (Vượt qua **31/31 automated tests**).
+- [ ] **Phase 8 — Individual E-Tickets & Box-Office Validation:** Xuất vé điện tử QR riêng cho từng thành viên và tích hợp máy soát vé.
 
 ---
 

@@ -10,6 +10,8 @@ export const SimulationBar: React.FC = () => {
     isLiveApi,
     isBackendHealthy,
     simulateSeatSelection,
+    simulateMemberFnB,
+    simulatePayment,
     sessionData,
   } = useGroupSession();
 
@@ -72,31 +74,68 @@ export const SimulationBar: React.FC = () => {
 
       {currentScreen === 'screen-seats' && (
         <>
-          <button className="sim-btn" onClick={() => simulateSeatSelection('minh', ['G10'])}>
-            Minh chọn G10
+          {inviteCode && currentCount < maxMembers && (
+            <>
+              <button
+                className="sim-btn"
+                disabled={!!loadingMember}
+                onClick={() => handleSimJoin('Minh')}
+              >
+                {loadingMember === 'Minh' ? 'Đang vào...' : '+ Minh vào'}
+              </button>
+              <button
+                className="sim-btn"
+                disabled={!!loadingMember}
+                onClick={() => handleSimJoin('An')}
+              >
+                {loadingMember === 'An' ? 'Đang vào...' : '+ An vào'}
+              </button>
+            </>
+          )}
+          <button className="sim-btn" onClick={() => simulateSeatSelection('minh', ['G09'])}>
+            Minh chọn G09
           </button>
-          <button className="sim-btn" onClick={() => simulateSeatSelection('an', ['G11'])}>
-            An chọn G11
-          </button>
-          <button className="sim-btn" onClick={() => simulateSeatSelection('huy', ['G12'])}>
-            Huy chọn G12
+          <button className="sim-btn" onClick={() => simulateSeatSelection('an', ['H08'])}>
+            An chọn H08
           </button>
           <button className="sim-btn active" onClick={() => goTo('screen-fnb')}>
-            → Chọn bắp nước
+            → Bắp nước
           </button>
         </>
       )}
 
       {currentScreen === 'screen-fnb' && (
-        <button className="sim-btn active" onClick={() => goTo('screen-payment')}>
-          → Thanh toán
-        </button>
+        <>
+          <button className="sim-btn" onClick={() => simulateMemberFnB('An', 'c2', 1)}>
+            An chọn Combo 2
+          </button>
+          <button className="sim-btn" onClick={() => simulateMemberFnB('Minh', 'c1', 1)}>
+            Minh chọn Combo 1
+          </button>
+          <button className="sim-btn" onClick={() => simulateMemberFnB('Huy', 'c3', 1)}>
+            Huy chọn Combo Phô Mai
+          </button>
+          <button className="sim-btn active" onClick={() => goTo('screen-payment')}>
+            → Thanh toán
+          </button>
+        </>
       )}
 
       {currentScreen === 'screen-payment' && (
-        <button className="sim-btn active" onClick={() => goTo('screen-confirmed')}>
-          → Hoàn tất
-        </button>
+        <>
+          <button className="sim-btn" onClick={() => simulatePayment('An', 'momo')}>
+            🟣 An trả MoMo
+          </button>
+          <button className="sim-btn" onClick={() => simulatePayment('Minh', 'zalopay')}>
+            🔵 Minh trả ZaloPay
+          </button>
+          <button className="sim-btn" onClick={() => simulatePayment('Huy', 'vnpay')}>
+            🔴 Huy trả VNPAY
+          </button>
+          <button className="sim-btn active" onClick={() => goTo('screen-confirmed')}>
+            → Hoàn tất
+          </button>
+        </>
       )}
 
       {currentScreen === 'screen-confirmed' && (

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useGroupSession } from '../context/GroupSessionContext';
 import { useToast } from '../context/ToastContext';
 import { StatusBar } from '../components/common/StatusBar';
 import { Header } from '../components/common/Header';
 import { CountdownBanner } from '../components/common/CountdownBanner';
+import { GroupShareModal } from '../components/common/GroupShareModal';
 import { SimulationBar } from '../components/simulation/SimulationBar';
 import { getMemberColor } from '../constants/theme';
 
@@ -11,14 +12,29 @@ export const SeatSelectionScreen: React.FC = () => {
   const {
     goTo,
     goBack,
+    bookingMode,
+    isGroupMode,
+    sessionId,
     sessionData,
     currentUser,
     displayMembers,
     heldSeats,
     mySeats,
     toggleSeat,
+    showShareModal,
+    setShowShareModal,
+    isHoldTimerStarted,
+    holdExpiresAt,
+    startHoldTimerAction,
   } = useGroupSession();
   const { showToast } = useToast();
+
+  useEffect(() => {
+    console.log('[SeatSelection] bookingMode:', bookingMode);
+    console.log('[SeatSelection] isGroupMode:', isGroupMode);
+    console.log('[SeatSelection] activeGroupSessionId:', isGroupMode ? sessionId : null);
+    console.log('[SeatSelection] groupShowtimeId:', isGroupMode ? sessionData?.showtime_id : null);
+  }, [bookingMode, isGroupMode, sessionId, sessionData]);
 
   const rows = ['O', 'N', 'M', 'L', 'K', 'J', 'I', 'H', 'G', 'F', 'E', 'D', 'C', 'B', 'A'];
   const seatsPerRow = 10;
@@ -36,51 +52,98 @@ export const SeatSelectionScreen: React.FC = () => {
     <div className="screen">
       <StatusBar />
       <Header
-        title={sessionData?.cinema_name || 'Galaxy Nguyễn Văn Quá'}
+        title="Chọn ghế"
         onBack={goBack}
         rightAction={
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 600 }}>
-            {sessionData?.show_time || '21:00'} ▾
-          </div>
-        }
-      />
-
-      <CountdownBanner initialSeconds={480} label="Thời gian giữ ghế:" />
-
-      {/* Group Context Bar with Dynamic Member Avatars */}
-      <div className="group-ctx" style={{ padding: '7px 16px' }}>
-        <div className="icon" style={{ fontSize: 14 }}>🎬</div>
-        <div className="info">
-          <div className="name" style={{ fontSize: 12 }}>
-            {sessionData?.name || 'Friday Movie Night'}
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {activeMembers.map((m) => (
-            <div
-              key={m.slot}
+          !isGroupMode ? (
+            <button
+              onClick={() => goTo('screen-create-group')}
               style={{
-                width: 22,
-                height: 22,
-                borderRadius: '50%',
-                background: m.colorHex,
-                border: '2px solid white',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                background: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)',
+                color: '#FFFFFF',
+                border: 'none',
+                padding: '6px 12px',
+                borderRadius: 20,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(249, 115, 22, 0.3)',
+              }}
+            >
+              <span>👥</span>
+              <span>Đặt nhóm</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowShareModal(true)}
+              title="Chia sẻ nhóm"
+              style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 9,
+                width: 34,
+                height: 34,
+                background: '#EFF6FF',
+                color: '#1D4ED8',
+                border: '1.5px solid #BFDBFE',
+                borderRadius: '50%',
+                fontSize: 15,
                 fontWeight: 700,
-                color: 'white',
+                cursor: 'pointer',
               }}
-              title={m.name}
             >
-              {m.name ? m.name.charAt(0).toUpperCase() : 'M'}
-            </div>
-          ))}
-        </div>
-      </div>
+              🔗
+            </button>
+          )
+        }
+      />
 
-      <SimulationBar />
+      <CountdownBanner
+        isActive={isHoldTimerStarted}
+        expiresAt={holdExpiresAt}
+        initialSeconds={600}
+        label="Thời gian giữ ghế:"
+      />
+
+      {/* Group Context Bar with Dynamic Member Avatars */}
+      {isGroupMode && (
+        <div className="group-ctx" style={{ padding: '7px 16px' }}>
+          <div className="icon" style={{ fontSize: 14 }}>🎬</div>
+          <div className="info">
+            <div className="name" style={{ fontSize: 12 }}>
+              {sessionData?.name || 'Friday Movie Night'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {activeMembers.map((m) => (
+              <div
+                key={m.slot}
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: '50%',
+                  background: m.colorHex,
+                  border: '2px solid white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: 'white',
+                }}
+                title={m.name}
+              >
+                {m.name ? m.name.charAt(0).toUpperCase() : 'M'}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isGroupMode && <SimulationBar />}
 
       <div className="body">
         {/* Seat Map */}
@@ -184,26 +247,28 @@ export const SeatSelectionScreen: React.FC = () => {
       </div>
 
       {/* Dynamic Group Seat Summary */}
-      <div className="group-seat-summary">
-        <div className="title">Vị trí nhóm ({activeMembers.length} người)</div>
-        {activeMembers.map((m) => {
-          const memberHeld = Object.values(heldSeats)
-            .filter((s) => s.userId === m.userId || (m.name && s.memberName?.toLowerCase() === m.name.toLowerCase()))
-            .map((s) => s.seatCode || s.seatId);
+      {isGroupMode && (
+        <div className="group-seat-summary">
+          <div className="title">Vị trí nhóm ({activeMembers.length} người)</div>
+          {activeMembers.map((m) => {
+            const memberHeld = Object.values(heldSeats)
+              .filter((s) => s.userId === m.userId || (m.name && s.memberName?.toLowerCase() === m.name.toLowerCase()))
+              .map((s) => s.seatCode || s.seatId);
 
-          return (
-            <div className="gss-row" key={m.slot}>
-              <div className="gss-dot" style={{ background: m.colorHex }} />
-              <div className="gss-name">
-                {m.name} {m.userId === currentUser?.userId ? '(Bạn)' : ''}
+            return (
+              <div className="gss-row" key={m.slot}>
+                <div className="gss-dot" style={{ background: m.colorHex }} />
+                <div className="gss-name">
+                  {m.name} {m.userId === currentUser?.userId ? '(Bạn)' : ''}
+                </div>
+                <div className="gss-seats">
+                  {memberHeld.length > 0 ? memberHeld.join(', ') : 'Chưa chọn'}
+                </div>
               </div>
-              <div className="gss-seats">
-                {memberHeld.length > 0 ? memberHeld.join(', ') : 'Chưa chọn'}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Bottom Bar */}
       <div className="bottom-bar">
@@ -214,11 +279,26 @@ export const SeatSelectionScreen: React.FC = () => {
         <button
           className="cta-primary"
           disabled={count === 0}
-          onClick={() => goTo('screen-fnb')}
+          onClick={async () => {
+            if (count === 0) {
+              showToast('Vui lòng chọn ghế trước khi tiếp tục');
+              return;
+            }
+            await startHoldTimerAction();
+            goTo('screen-fnb');
+          }}
         >
           Tiếp tục →
         </button>
       </div>
+
+      {/* Group Share Modal */}
+      {isGroupMode && (
+        <GroupShareModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </div>
   );
 };

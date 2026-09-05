@@ -64,6 +64,8 @@ export interface GroupMemberResponse {
   group_session_id: string;
   user_id: string;
   name: string;
+  role?: 'host' | 'member';
+  color_slot?: string;
   is_host: boolean;
   status: 'JOINED' | 'SELECTING' | 'READY' | 'PAID' | 'LEFT';
   joined_at: string;
@@ -124,6 +126,10 @@ export interface JoinInviteResponseData {
     status: string;
     payment_mode: string;
     max_members: number;
+    show_time?: string;
+    show_date?: string;
+    movie_title?: string;
+    cinema_name?: string;
   };
   member: GroupMemberResponse;
   isNew: boolean;

@@ -56,7 +56,7 @@ export const JoinGroupModal: React.FC<JoinGroupModalProps> = ({ initialCode, onC
       url.searchParams.delete('join');
       url.searchParams.delete('code');
       window.history.replaceState({}, document.title, url.pathname);
-      goTo('screen-lobby');
+      goTo('screen-seats');
     }
   };
 

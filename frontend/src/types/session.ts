@@ -11,7 +11,14 @@ export type ScreenId =
   | 'screen-payment'
   | 'screen-confirmed'
   | 'screen-ticket'
-  | 'screen-seats-solo';
+  | 'screen-seats-solo'
+  | 'screen-cinemas'
+  | 'screen-cinetag'
+  | 'screen-movies'
+  | 'screen-account'
+  | 'screen-not-found';
+
+export type BookingMode = 'SOLO' | 'GROUP';
 
 export interface CurrentUser {
   userId: string;
@@ -54,4 +61,81 @@ export interface HeldSeatInfo {
   heldAt?: string;
 }
 
+export interface FnBOrderItem {
+  itemId?: string;
+  comboId: string;
+  comboName: string;
+  quantity: number;
+  unitPrice?: number;
+  subtotal?: number;
+}
+
+export interface MemberFnBSummary {
+  memberId: string;
+  userId: string;
+  memberName: string;
+  role: string;
+  colorSlot: string;
+  isHost: boolean;
+  totalAmount: number;
+  items: FnBOrderItem[];
+}
+
+export interface AggregatedFnBItem {
+  comboId: string;
+  comboName: string;
+  totalQuantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+export interface GroupFnBSummary {
+  sessionId: string;
+  totalGroupAmount: number;
+  totalGroupItemsCount: number;
+  members: MemberFnBSummary[];
+  aggregatedItems: AggregatedFnBItem[];
+}
+
+export type PaymentMethod = 'momo' | 'zalopay' | 'vnpay' | 'card';
+
+export interface MemberPaymentInfo {
+  memberId: string;
+  userId: string;
+  memberName: string;
+  role: string;
+  colorSlot: string;
+  status: string;
+  isHost: boolean;
+  seats: Array<{ id: string; seatId: string; seatCode: string; price: number }>;
+  seatAmount: number;
+  fnbItems: FnBOrderItem[];
+  fnbAmount: number;
+  totalAmount: number;
+  isPaid: boolean;
+  payment?: {
+    id: string;
+    amount: number;
+    paymentMethod: PaymentMethod;
+    gatewayRef?: string;
+    paidAt?: string;
+  } | null;
+}
+
+export interface PaymentSummaryResponse {
+  sessionId: string;
+  sessionName: string;
+  sessionStatus: string;
+  paymentMode: 'split' | 'host_pays';
+  hostUserId: string;
+  totalSessionAmount: number;
+  totalMembers: number;
+  paidMembersCount: number;
+  isAllPaid: boolean;
+  isConfirmed: boolean;
+  members: MemberPaymentInfo[];
+}
+
 export type { GroupSessionDetailResponseData, GroupMemberResponse };
+
+

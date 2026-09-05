@@ -10,6 +10,8 @@ import { FnBScreen } from './pages/FnBScreen';
 import { PaymentScreen } from './pages/PaymentScreen';
 import { ConfirmedScreen } from './pages/ConfirmedScreen';
 import { ETicketScreen } from './pages/ETicketScreen';
+import { ComingSoonScreen } from './pages/ComingSoonScreen';
+import { NotFoundScreen } from './pages/NotFoundScreen';
 import { JoinGroupModal } from './components/join/JoinGroupModal';
 
 export const App: React.FC = () => {
@@ -47,8 +49,42 @@ export const App: React.FC = () => {
         return <ConfirmedScreen />;
       case 'screen-ticket':
         return <ETicketScreen />;
+      case 'screen-cinemas':
+        return (
+          <ComingSoonScreen
+            tabId="cinemas"
+            title="Rạp phim sắp ra mắt"
+            description="Khám phá hệ thống rạp Galaxy Cinema, xem thông tin rạp, tiện ích và suất chiếu gần bạn."
+          />
+        );
+      case 'screen-cinetag':
+        return (
+          <ComingSoonScreen
+            tabId="cinetag"
+            title="CineTag# sắp ra mắt"
+            description="Không gian dành cho cộng đồng điện ảnh và những trải nghiệm thú vị cùng Galaxy."
+          />
+        );
+      case 'screen-movies':
+        return (
+          <ComingSoonScreen
+            tabId="movies"
+            title="Điện ảnh sắp ra mắt"
+            description="Cập nhật tin tức, nội dung và những câu chuyện thú vị xoay quanh thế giới điện ảnh."
+          />
+        );
+      case 'screen-account':
+        return (
+          <ComingSoonScreen
+            tabId="account"
+            title="Tài khoản sắp ra mắt"
+            description="Quản lý thông tin cá nhân, lịch sử đặt vé, ưu đãi và các trải nghiệm của bạn."
+          />
+        );
+      case 'screen-not-found':
+        return <NotFoundScreen />;
       default:
-        return <HomeScreen />;
+        return <NotFoundScreen />;
     }
   };
 
