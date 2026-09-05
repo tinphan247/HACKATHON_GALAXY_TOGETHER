@@ -369,8 +369,8 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Realtime Seat & F&B State (Phase 5 & 6)
   const [heldSeats, setHeldSeats] = useState<Record<string, HeldSeatInfo>>({});
-  const [comboQty, setComboQty] = useState<Record<string, number>>({ c1: 0, c2: 0, c3: 0, c4: 0 });
-  const comboPrices: Record<string, number> = { c1: 115000, c2: 134000, c3: 149000, c4: 229000 };
+  const [comboQty, setComboQty] = useState<Record<string, number>>({ c1: 0, c2: 0, c3: 0, c4: 0, c5: 0 });
+  const comboPrices: Record<string, number> = { c1: 115000, c2: 134000, c3: 149000, c4: 229000, c5: 109000 };
   const [groupFnBSummary, setGroupFnBSummary] = useState<GroupFnBSummary | null>(null);
 
   // Realtime Payment State (Phase 7)

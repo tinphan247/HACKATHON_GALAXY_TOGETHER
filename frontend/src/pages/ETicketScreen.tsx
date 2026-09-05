@@ -1,8 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGroupSession } from '../context/GroupSessionContext';
-import { StatusBar } from '../components/common/StatusBar';
-import { Header } from '../components/common/Header';
+import { useToast } from '../context/ToastContext';
 import { RealQrCode } from '../components/common/RealQrCode';
+
+const COMBO_NAMES: Record<string, string> = {
+  c1: 'Combo 1 Big Extra',
+  c2: 'Combo 2 Big Extra',
+  c3: 'Combo 3',
+  c4: 'Combo 4',
+  c5: 'Combo 2 Big',
+};
 
 export const ETicketScreen: React.FC = () => {
   const {
@@ -18,17 +25,24 @@ export const ETicketScreen: React.FC = () => {
     selectedShowtime,
   } = useGroupSession();
 
+  const { showToast } = useToast();
+  const [isExporting, setIsExporting] = useState(false);
+
   const code = inviteCode || sessionData?.invite?.code || 'GLX-892';
-  const mySeatStr = mySeats.length > 0 ? mySeats.join(' • ') : 'Ghế đã chọn';
-  const mySeatCompact = mySeats.length > 0 ? mySeats.join('') : 'SEAT';
-  const myName = currentUser?.name || 'TIN';
+  const mySeatStr = mySeats.length > 0 ? mySeats.join(', ') : 'G9';
+  const mySeatCompact = mySeats.length > 0 ? mySeats.join('') : 'G9';
+  const myName = currentUser?.name || 'TÍN';
   const ticketPayload = `GLX-TICKET:${code}:${myName.toUpperCase()}:${mySeatCompact}`;
 
-  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Vé Điện Tử';
-  const cinemaName = sessionData?.cinema_name || selectedShowtime?.cinemaName || 'Galaxy Cinema';
-  const showDate = sessionData?.show_date || selectedShowtime?.showDate || '';
+  const rawNum = (code || '').replace(/\D/g, '');
+  const ticketCodeDisplay = rawNum ? rawNum.padEnd(6, '5').slice(0, 6) : '138055';
+
+  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Quý Tử Vượt Giàu';
+  const moviePoster = selectedShowtime?.moviePoster || '/posters/poster_quytuvuotgiau.jpg';
+  const cinemaName = sessionData?.cinema_name || selectedShowtime?.cinemaName || 'Galaxy Cinema Nguyễn Văn Quá';
+  const screenName = sessionData?.screen_name || selectedShowtime?.screenName || 'Rạp 3';
+  const showDate = sessionData?.show_date || selectedShowtime?.showDate || '07/09/2026';
   const showTime = sessionData?.show_time || selectedShowtime?.showTime || '21:00';
-  const screenName = sessionData?.screen_name || selectedShowtime?.screenName || 'Phòng chiếu';
   const ageRating = selectedShowtime?.movieAgeRating || 'K';
   const formatText = selectedShowtime?.format || '2D PHỤ ĐỀ';
 
@@ -45,128 +59,296 @@ export const ETicketScreen: React.FC = () => {
     (sum, k) => sum + (comboQty[k] || 0) * (comboPrices[k] || 0),
     0
   );
-  const myTotal = seatTotal + fnbTotal || standardPrice;
+  const myTotal = seatTotal + fnbTotal || 100000;
   const formatMoney = (n: number) => n.toLocaleString('vi-VN') + 'đ';
 
-  const otherMembers = displayMembers.filter((m) => m.status !== 'EMPTY' && m.userId !== currentUser?.userId);
+  // Format Show Date Time
+  const formatShowDateTime = (dateStr?: string, timeStr?: string) => {
+    const time = timeStr || '21:00';
+    if (!dateStr) return `Suất ${time} - Thứ Hai, 07/09/2026`;
+    try {
+      let d: Date;
+      if (dateStr.includes('/')) {
+        const [day, month, year] = dateStr.split('/');
+        d = new Date(Number(year), Number(month) - 1, Number(day));
+      } else {
+        d = new Date(dateStr);
+      }
+      const daysOfWeek = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+      const dayName = daysOfWeek[d.getDay()] || 'Chủ Nhật';
+      const dayFormatted = d.getDate().toString().padStart(2, '0');
+      const monthFormatted = (d.getMonth() + 1).toString().padStart(2, '0');
+      const yearFormatted = d.getFullYear();
+      return `Suất ${time} - ${dayName}, ${dayFormatted}/${monthFormatted}/${yearFormatted}`;
+    } catch {
+      return `Suất ${time} - ${dateStr}`;
+    }
+  };
+
+  // Selected combos list
+  const selectedCombos = Object.entries(comboQty)
+    .filter(([_, q]) => q > 0)
+    .map(([id, q]) => `${q}x ${COMBO_NAMES[id] || id}`);
+  const hasCombos = selectedCombos.length > 0;
+
+  // Other members in group
+  const otherMembers = displayMembers.filter(
+    (m) => m.status !== 'EMPTY' && m.userId !== currentUser?.userId
+  );
+
+  const handleExportInvoice = () => {
+    setIsExporting(true);
+    setTimeout(() => {
+      setIsExporting(false);
+      showToast('🧾 Hoá đơn điện tử VAT đã được khởi tạo và gửi tới email của bạn!');
+    }, 600);
+  };
 
   return (
-    <div className="screen">
-      <StatusBar />
-      <Header title="Vé điện tử" />
+    <div className="screen" style={{ background: '#F5F5F7' }}>
+      {/* Top Header with circular Back button */}
+      <div
+        style={{
+          padding: '14px 16px 10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <button
+          type="button"
+          onClick={resetToHome}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            background: '#FFFFFF',
+            border: '1px solid #E5E7EB',
+            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            padding: 0,
+          }}
+          aria-label="Quay lại"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1F2937" strokeWidth="2.5">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
 
-      <div className="body">
-        <div className="ticket">
-          <div className="ticket-header">
-            <div className="movie">{movieTitle.toUpperCase()}</div>
-            <div className="cinema">{cinemaName}</div>
-            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              <span className="badge badge-age">{ageRating}</span>
-              <span className="badge badge-format">{formatText}</span>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#1F2937' }}>
+          Vé Điện Tử
+        </div>
+
+        <div style={{ width: 40 }} />
+      </div>
+
+      {/* Main Body */}
+      <div className="body" style={{ paddingBottom: 24, background: '#F5F5F7' }}>
+        {/* Ticket Voucher Card */}
+        <div className="ticket-voucher">
+          {/* Movie Header */}
+          <div className="ticket-movie-section">
+            <div className="ticket-movie-header-row">
+              <img
+                src={moviePoster}
+                alt={movieTitle}
+                className="ticket-poster-thumb"
+              />
+              <div className="ticket-movie-info">
+                <div className="ticket-movie-title">{movieTitle}</div>
+                <div className="ticket-movie-tags">
+                  <span className="ticket-tag-age">{ageRating}</span>
+                  <span className="ticket-tag-format">{formatText}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="ticket-cinema-row">
+              <div className="ticket-cinema-name">
+                {cinemaName} - {screenName}
+              </div>
+              <div className="ticket-showtime-text">
+                {formatShowDateTime(showDate, showTime)}
+              </div>
             </div>
           </div>
 
-          <div className="ticket-body">
-            <div className="ticket-row">
-              <span className="ticket-label">Khách hàng</span>
-              <span className="ticket-value">{myName}</span>
+          {/* QR Code & Seats Section */}
+          <div className="ticket-qr-section">
+            <RealQrCode value={ticketPayload} size={135} />
+            <div
+              style={{
+                fontSize: 11,
+                fontFamily: 'monospace',
+                letterSpacing: '1px',
+                color: '#6B7280',
+                marginTop: 2,
+              }}
+            >
+              {code} • {myName.toUpperCase()} • {mySeatCompact}
             </div>
-            <div className="ticket-row">
-              <span className="ticket-label">Ngày chiếu</span>
-              <span className="ticket-value">{showDate}</span>
-            </div>
-            <div className="ticket-row">
-              <span className="ticket-label">Giờ chiếu</span>
-              <span className="ticket-value">{showTime}</span>
-            </div>
-            <div className="ticket-row">
-              <span className="ticket-label">Rạp</span>
-              <span className="ticket-value">{screenName}</span>
-            </div>
-            <div className="ticket-row">
-              <span className="ticket-label">Ghế</span>
-              <span className="ticket-value" style={{ color: 'var(--orange)' }}>
-                {mySeatStr}
-              </span>
-            </div>
-            <div className="ticket-row">
-              <span className="ticket-label">Thanh toán</span>
-              <span className="ticket-value" style={{ color: '#16A34A' }}>
-                {formatMoney(myTotal)} ✓
-              </span>
+
+            <div className="ticket-seat-section">
+              <div className="ticket-seat-label">
+                Ghế - <strong className="ticket-seat-value">{mySeatStr}</strong>
+              </div>
+
+              {/* Conditional Combo Section */}
+              {hasCombos && (
+                <div className="ticket-combo-row">
+                  <span className="ticket-combo-label">Combo bắp nước - </span>
+                  <span className="ticket-combo-value">{selectedCombos.join(', ')}</span>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="ticket-divider" />
+          {/* Ticket Notches with Dashed Line */}
+          <div className="ticket-cutout-divider">
+            <div className="ticket-notch ticket-notch-left" />
+            <div className="ticket-cutout-line" />
+            <div className="ticket-notch ticket-notch-right" />
+          </div>
 
-          <div className="ticket-qr">
-            <RealQrCode value={ticketPayload} size={110} />
-            <div className="code">{code} • {myName.toUpperCase()} • {mySeatCompact}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-              Vé điện tử — Xuất trình tại quầy soát vé
+          {/* Note Box */}
+          <div className="ticket-notice-text">
+            Khách hàng vui lòng nhận vé giấy tại quầy vé để miễn phụ thu phí giữ xe qua đêm đối với suất chiếu kết thúc sau 23:01.
+          </div>
+
+          {/* 3-Column Ticket Stats */}
+          <div className="ticket-stats-grid">
+            <div className="ticket-stat-col">
+              <div className="ticket-stat-label">Mã Vé</div>
+              <div className="ticket-stat-value">{ticketCodeDisplay}</div>
+            </div>
+            <div className="ticket-stat-col">
+              <div className="ticket-stat-label">Stars</div>
+              <div className="ticket-stat-value">0</div>
+            </div>
+            <div className="ticket-stat-col">
+              <div className="ticket-stat-label">Đã Thanh Toán</div>
+              <div className="ticket-stat-value ticket-stat-price">{formatMoney(myTotal)}</div>
             </div>
           </div>
         </div>
 
-        {/* Group Ticket Summary */}
+        {/* Collapsible Group Members Summary (if in group) */}
         {otherMembers.length > 0 && (
-          <div style={{ margin: '12px 16px' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
-              Vé các thành viên khác ({otherMembers.length})
-            </div>
-            <div className="card" style={{ margin: 0 }}>
-              {otherMembers.map((m, idx) => {
-                const memberHeld = Object.values(heldSeats)
-                  .filter((s) => s.userId === m.userId || (m.name && s.memberName?.toLowerCase() === m.name.toLowerCase()))
-                  .map((s) => s.seatCode || s.seatId);
+          <div style={{ margin: '0 16px 14px' }}>
+            <details
+              style={{
+                background: '#FFFFFF',
+                borderRadius: 12,
+                border: '1px solid #E5E7EB',
+                padding: '12px 14px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+              }}
+            >
+              <summary
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: '#374151',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  userSelect: 'none',
+                }}
+              >
+                <span>Vé thành viên khác cùng phòng ({otherMembers.length})</span>
+                <span style={{ fontSize: 12, color: '#F97316', fontWeight: 600 }}>Chi tiết ▾</span>
+              </summary>
+              <div
+                style={{
+                  marginTop: 10,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  borderTop: '1px solid #F3F4F6',
+                  paddingTop: 10,
+                }}
+              >
+                {otherMembers.map((m, idx) => {
+                  const memberHeld = Object.values(heldSeats)
+                    .filter(
+                      (s) =>
+                        s.userId === m.userId ||
+                        (m.name && s.memberName?.toLowerCase() === m.name.toLowerCase())
+                    )
+                    .map((s) => s.seatCode || s.seatId);
 
-                const seatDesc = memberHeld.length > 0 ? memberHeld.join(', ') : 'Ghế đã chọn';
-                const isLast = idx === otherMembers.length - 1;
+                  const seatDesc = memberHeld.length > 0 ? memberHeld.join(', ') : '1 ghế';
 
-                return (
-                  <div
-                    key={m.slot || idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '8px 0',
-                      borderBottom: isLast ? 'none' : '1px solid var(--border)',
-                    }}
-                  >
+                  return (
                     <div
-                      className="member-avatar"
+                      key={m.slot || idx}
                       style={{
-                        background: m.colorHex,
-                        width: 28,
-                        height: 28,
-                        fontSize: 11,
-                        color: 'white',
-                        fontWeight: 700,
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: '50%',
+                        justifyContent: 'space-between',
+                        fontSize: 12.5,
                       }}
                     >
-                      {m.name ? m.name.charAt(0).toUpperCase() : 'M'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            background: m.colorHex || '#F97316',
+                            display: 'inline-block',
+                          }}
+                        />
+                        <span style={{ fontWeight: 600, color: '#1F2937' }}>{m.name}</span>
+                        <span style={{ color: '#6B7280' }}>({seatDesc})</span>
+                      </div>
+                      <span style={{ color: '#16A34A', fontWeight: 600 }}>✓ Đã thanh toán</span>
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{m.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{seatDesc}</div>
-                    </div>
-                    <div style={{ fontSize: 12, color: '#16A34A', fontWeight: 600 }}>✓ Đã xác nhận</div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </details>
           </div>
         )}
       </div>
 
-      <div style={{ padding: '12px 16px 20px', background: 'var(--white)', borderTop: '1px solid var(--border)' }}>
-        <button className="cta-primary secondary" onClick={resetToHome}>
-          🏠 Về trang chủ
+      {/* Footer Action Buttons */}
+      <div className="ticket-actions-row">
+        <button
+          type="button"
+          className="btn-ticket-outline"
+          onClick={handleExportInvoice}
+          disabled={isExporting}
+        >
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+          </svg>
+          {isExporting ? 'Đang xuất...' : 'Xuất Hoá Đơn'}
+        </button>
+
+        <button
+          type="button"
+          className="btn-ticket-solid"
+          onClick={resetToHome}
+        >
+          Về trang chủ
         </button>
       </div>
     </div>

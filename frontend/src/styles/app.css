@@ -133,22 +133,25 @@ body {
 /* ─── COUNTDOWN BANNER ─── */
 .countdown-banner {
   background: var(--orange);
-  padding: 9px 16px;
+  min-height: 48px;
+  padding: 10px 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 .countdown-banner span {
   color: var(--white);
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 600;
 }
 .countdown-banner .time {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--white);
+  letter-spacing: 0.5px;
 }
 .countdown-banner.urgent {
   animation: pulse-bg 1s infinite;
@@ -680,79 +683,180 @@ body {
   flex: 1;
 }
 
-/* ─── F&B CARDS ─── */
+/* ─── F&B CARDS (REDESIGNED V2) ─── */
 .fnb-card {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 12px;
-  margin: 0 16px 10px;
+  align-items: stretch;
+  gap: 14px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 14px;
+  margin: 0 16px 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 .fnb-img {
-  width: 70px;
-  height: 70px;
+  width: 105px;
+  height: 105px;
   border-radius: 8px;
-  background: var(--surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
+  object-fit: cover;
+  background: #F3F4F6;
   flex-shrink: 0;
+  display: block;
 }
 .fnb-info {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.fnb-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
 }
 .fnb-name {
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 700;
-  color: var(--text-primary);
-}
-.fnb-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 2px;
-  line-height: 1.4;
-}
-.fnb-price {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-top: 4px;
+  color: #2B2B2B;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
 }
 .stepper {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 .stepper-btn {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  border: 1.5px solid var(--border);
-  background: var(--white);
+  border: 1.5px solid #D1D5DB;
+  background: #FFFFFF;
   cursor: pointer;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--navy);
+  color: #2B2B2B;
   transition: all 0.15s;
+  padding: 0;
+  user-select: none;
 }
-.stepper-btn:hover {
-  border-color: var(--orange);
-  color: var(--orange);
+.stepper-btn:hover:not(:disabled) {
+  border-color: #F97316;
+  color: #F97316;
+}
+.stepper-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: #E5E7EB;
+  color: #9CA3AF;
 }
 .stepper-count {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
-  color: var(--text-primary);
-  min-width: 20px;
+  color: #2B2B2B;
+  min-width: 22px;
   text-align: center;
+  user-select: none;
+}
+.fnb-desc {
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: #6B7280;
+  margin: 4px 0 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fnb-price {
+  font-size: 17.5px;
+  font-weight: 700;
+  color: #2B2B2B;
+}
+.fnb-duplicate-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #C2410C;
+  background: #FFF7ED;
+  border: 1px solid #FFEDD5;
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-top: 5px;
+  line-height: 1.3;
+}
+
+/* Sticky Bottom Bar for F&B */
+.fnb-sticky-bottom {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 480px;
+  margin: 0 auto;
+  background: #FFFFFF;
+  border-top: 1px solid #E5E7EB;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 100;
+}
+.fnb-bottom-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fnb-bottom-seats {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #4B5563;
+}
+.fnb-bottom-total {
+  font-size: 14.5px;
+  color: #6B7280;
+  font-weight: 500;
+}
+.fnb-bottom-total-num {
+  font-size: 21px;
+  font-weight: 700;
+  color: #F97316;
+  margin-left: 4px;
+}
+.fnb-bottom-cta {
+  background: #F97316;
+  color: #FFFFFF;
+  font-size: 16px;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  height: 48px;
+  padding: 0 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.25);
+  transition: opacity 0.15s, transform 0.1s;
+}
+.fnb-bottom-cta:active {
+  opacity: 0.9;
+  transform: scale(0.98);
 }
 
 /* ─── PAYMENT CARD ─── */
@@ -1016,66 +1120,241 @@ body {
   line-height: 1.6;
 }
 
-/* ─── E-TICKET ─── */
-.ticket {
-  background: var(--white);
+/* ─── E-TICKET (GALAXY CINEMA VOUCHER REDESIGN) ─── */
+.ticket-voucher {
+  background: #FFFFFF;
   border-radius: 16px;
-  border: 1px solid var(--border);
-  margin: 16px;
+  border: 1px solid #E5E7EB;
+  border-top: 5px solid #F97316;
+  margin: 12px 16px 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  position: relative;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
-.ticket-header {
-  background: var(--navy);
-  padding: 20px 20px 16px;
+.ticket-movie-section {
+  padding: 18px 18px 14px;
 }
-.ticket-header .movie {
+.ticket-movie-header-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.ticket-poster-thumb {
+  width: 68px;
+  height: 96px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #F3F4F6;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.ticket-movie-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ticket-movie-title {
   font-size: 18px;
   font-weight: 700;
-  color: var(--white);
+  color: #1F2937;
+  line-height: 1.3;
 }
-.ticket-header .cinema {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
-  margin-top: 4px;
-}
-.ticket-body {
-  padding: 16px 20px;
-}
-.ticket-row {
+.ticket-movie-tags {
   display: flex;
-  justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
 }
-.ticket-row:last-child {
-  border-bottom: none;
+.ticket-tag-age {
+  background: #F97316;
+  color: #FFFFFF;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1.2;
 }
-.ticket-label {
+.ticket-tag-format {
   font-size: 12px;
-  color: var(--text-muted);
+  font-weight: 600;
+  color: #4B5563;
 }
-.ticket-value {
-  font-size: 13px;
+.ticket-cinema-row {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #F3F4F6;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ticket-cinema-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #374151;
+}
+.ticket-showtime-text {
+  font-size: 14px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #111827;
 }
-.ticket-divider {
-  height: 1px;
-  background: repeating-linear-gradient(to right, var(--border) 0, var(--border) 8px, transparent 8px, transparent 14px);
-}
-.ticket-qr {
-  padding: 20px;
+.ticket-qr-section {
+  padding: 10px 18px 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 8px;
 }
-.ticket-qr .code {
+.ticket-seat-section {
+  width: 100%;
+  padding-top: 12px;
+  border-top: 1.5px dashed #E5E7EB;
+  text-align: center;
+}
+.ticket-seat-label {
+  font-size: 14px;
+  color: #4B5563;
+}
+.ticket-seat-value {
+  font-size: 17px;
+  font-weight: 800;
+  color: #F97316;
+}
+.ticket-combo-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #E5E7EB;
+  font-size: 13.5px;
+  color: #374151;
+  text-align: center;
+}
+.ticket-combo-label {
+  font-weight: 500;
+  color: #6B7280;
+}
+.ticket-combo-value {
+  font-weight: 700;
+  color: #1F2937;
+}
+.ticket-notice-text {
   font-size: 11px;
-  color: var(--text-muted);
-  letter-spacing: 1px;
-  font-family: monospace;
+  color: #6B7280;
+  line-height: 1.45;
+  text-align: center;
+  padding: 10px 18px;
+  background: #FFFFFF;
+}
+
+/* Ticket Notches */
+.ticket-cutout-divider {
+  position: relative;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+.ticket-cutout-line {
+  flex: 1;
+  border-bottom: 1.5px dashed #D1D5DB;
+  margin: 0 16px;
+}
+.ticket-notch {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #F5F5F7;
+  top: 1px;
+  z-index: 2;
+}
+.ticket-notch-left {
+  left: -11px;
+  box-shadow: inset -1px 0 0 #E5E7EB;
+}
+.ticket-notch-right {
+  right: -11px;
+  box-shadow: inset 1px 0 0 #E5E7EB;
+}
+
+/* 3-Column Ticket Stats */
+.ticket-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  text-align: center;
+  padding: 14px 14px 16px;
+  background: #FAFAFA;
+}
+.ticket-stat-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ticket-stat-col:not(:last-child) {
+  border-right: 1px solid #E5E7EB;
+}
+.ticket-stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6B7280;
+}
+.ticket-stat-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1F2937;
+}
+.ticket-stat-price {
+  color: #F97316;
+  font-size: 14.5px;
+}
+
+/* Actions Footer */
+.ticket-actions-row {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: #FFFFFF;
+  border-top: 1px solid #E5E7EB;
+}
+.btn-ticket-outline {
+  flex: 1;
+  height: 48px;
+  border-radius: 10px;
+  border: 1.5px solid #F97316;
+  background: #FFFFFF;
+  color: #F97316;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+.btn-ticket-outline:hover {
+  background: #FFF7ED;
+}
+.btn-ticket-solid {
+  flex: 1;
+  height: 48px;
+  border-radius: 10px;
+  border: none;
+  background: #F97316;
+  color: #FFFFFF;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.25);
+  transition: opacity 0.15s;
+}
+.btn-ticket-solid:hover {
+  opacity: 0.92;
 }
 
 /* ─── SHOWTIME SCREEN EXTRAS ─── */

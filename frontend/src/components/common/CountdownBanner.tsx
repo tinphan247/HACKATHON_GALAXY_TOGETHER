@@ -50,7 +50,10 @@ export const CountdownBanner: React.FC<CountdownBannerProps> = ({
 
   return (
     <div className={`countdown-banner ${isUrgent ? 'urgent' : ''}`}>
-      <span>⏱</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#ffffff', flexShrink: 0 }}>
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
       <span>{label}</span>
       <span className="time">{`${minutes}:${seconds}`}</span>
     </div>

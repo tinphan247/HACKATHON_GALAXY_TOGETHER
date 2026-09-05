@@ -72,7 +72,8 @@ export interface FnBProduct {
   id: string;
   name: string;
   desc: string;
-  icon: string;
+  icon?: string;
+  image?: string;
   price: number;
   category: 'single' | 'combo' | 'group';
 }

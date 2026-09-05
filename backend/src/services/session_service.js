@@ -734,10 +734,11 @@ export class SessionService {
    */
   static getFnBCatalog() {
     return [
-      { id: 'c1', name: 'Combo 1 Big Extra', desc: '1 Bắp Ngọt 60oz + 1 Nước ngọt có gas 32oz', icon: '🍿', price: 115000 },
-      { id: 'c2', name: 'Combo 2 Big Extra', desc: '1 Bắp Ngọt 60oz + 2 Nước ngọt có gas 32oz', icon: '🥤', price: 134000 },
-      { id: 'c3', name: 'Combo Phô Mai', desc: '1 Bắp Phô Mai 60oz + 2 Nước ngọt 32oz', icon: '🧀', price: 149000 },
-      { id: 'c4', name: 'Combo Nhóm 4 Người', desc: '2 Bắp Lớn + 4 Nước 32oz + 1 Snack', icon: '🎉', price: 229000 },
+      { id: 'c2', name: 'Combo 2 Big Extra', desc: '1 Bắp rang bơ lớn 60oz + 2 Nước ngọt có gas 32oz + 1 snack khoai tây giòn rụm', price: 134000, image: '/combos/combo_2_big_extra.jpg' },
+      { id: 'c1', name: 'Combo 1 Big Extra', desc: '1 Bắp rang bơ lớn 60oz + 1 Nước ngọt có gas 32oz + 1 snack thơm ngon', price: 115000, image: '/combos/combo_1_big_extra.jpg' },
+      { id: 'c3', name: 'Combo 3', desc: '1 Bắp rang bơ phô mai thơm lừng 60oz + 2 Nước ngọt có gas 32oz mát lạnh', price: 149000, image: '/combos/combo_cheese.jpg' },
+      { id: 'c4', name: 'Combo 4', desc: '2 Bắp rang bơ khổng lồ + 4 Nước ngọt có gas 32oz + 2 Snack chia sẻ cùng bạn bè', price: 229000, image: '/combos/combo_group_4.jpg' },
+      { id: 'c5', name: 'Combo 2 Big', desc: '1 Bắp rang bơ lớn 60oz + 2 Nước ngọt có gas 22oz vừa vặn cho cặp đôi', price: 109000, image: '/combos/combo_2_big.jpg' },
     ];
   }
 

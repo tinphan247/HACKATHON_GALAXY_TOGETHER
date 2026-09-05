@@ -1,9 +1,53 @@
 import React from 'react';
 import { useGroupSession } from '../context/GroupSessionContext';
-import { StatusBar } from '../components/common/StatusBar';
 import { Header } from '../components/common/Header';
 import { CountdownBanner } from '../components/common/CountdownBanner';
-import { getMemberColorByKey } from '../constants/theme';
+
+interface FnBProductItem {
+  id: string;
+  name: string;
+  desc: string;
+  price: number;
+  image: string;
+}
+
+const COMBOS: FnBProductItem[] = [
+  {
+    id: 'c2',
+    name: 'Combo 2 Big Extra',
+    desc: 'Nhân đôi sự sảng khoái! Combo gồm 1 bắp rang bơ lớn 60oz, 2 Pepsi cỡ lớn 32oz + 1 snack khoai tây giòn rụm',
+    price: 134000,
+    image: '/combos/combo_2_big_extra.jpg',
+  },
+  {
+    id: 'c1',
+    name: 'Combo 1 Big Extra',
+    desc: 'Thỏa mãn cơn thèm bắp nước! Combo gồm 1 bắp rang bơ lớn 60oz, 1 Pepsi 32oz + 1 snack thơm ngon',
+    price: 115000,
+    image: '/combos/combo_1_big_extra.jpg',
+  },
+  {
+    id: 'c3',
+    name: 'Combo 3',
+    desc: 'Chia sẻ niềm vui trọn vẹn với 1 bắp phô mai đặc biệt 60oz vàng óng kèm 2 ly Pepsi 32oz',
+    price: 149000,
+    image: '/combos/combo_cheese.jpg',
+  },
+  {
+    id: 'c4',
+    name: 'Combo 4',
+    desc: 'Thêm bạn thêm vui! Combo tiết kiệm cho nhóm gồm 2 bắp lớn 60oz, 4 ly Pepsi 32oz và 2 snack',
+    price: 229000,
+    image: '/combos/combo_group_4.jpg',
+  },
+  {
+    id: 'c5',
+    name: 'Combo 2 Big',
+    desc: 'Nhân đôi sự sảng khoái tiêu chuẩn với 1 bắp rang bơ lớn 60oz và 2 ly Pepsi 22oz vừa vặn cho 2 người',
+    price: 109000,
+    image: '/combos/combo_2_big.jpg',
+  },
+];
 
 export const FnBScreen: React.FC = () => {
   const {
@@ -14,9 +58,9 @@ export const FnBScreen: React.FC = () => {
     updateComboQty,
     comboPrices,
     groupFnBSummary,
-    sessionData,
     currentUser,
     selectedShowtime,
+    holdExpiresAt,
   } = useGroupSession();
 
   const standardPrice = selectedShowtime?.ticketPriceStandard || 55000;
@@ -32,258 +76,115 @@ export const FnBScreen: React.FC = () => {
     (sum, k) => sum + (comboQty[k] || 0) * (comboPrices[k] || 0),
     0
   );
-  const total = seatTotal + fnbTotal;
 
+  const total = seatTotal + fnbTotal;
   const formatMoney = (n: number) => n.toLocaleString('vi-VN') + 'đ';
 
-  const combos = [
-    { id: 'c1', name: 'Combo 1 Big Extra', desc: '1 Bắp Ngọt 60oz + 1 Nước ngọt có gas 32oz', icon: '🍿', price: 115000 },
-    { id: 'c2', name: 'Combo 2 Big Extra', desc: '1 Bắp Ngọt 60oz + 2 Nước ngọt có gas 32oz', icon: '🥤', price: 134000 },
-    { id: 'c3', name: 'Combo Phô Mai', desc: '1 Bắp Phô Mai 60oz + 2 Nước ngọt 32oz', icon: '🧀', price: 149000 },
-    { id: 'c4', name: 'Combo Nhóm 4 Người', desc: '2 Bắp Lớn + 4 Nước 32oz + 1 Snack', icon: '🎉', price: 229000 },
-  ];
-
-  // Members list from summary or sessionData
-  const activeMembers = sessionData?.members || [];
-  const memberCount = activeMembers.length || 1;
-  const totalFnBItems = groupFnBSummary?.totalGroupItemsCount || 0;
-  const hasMultipleBigCombos = (groupFnBSummary?.aggregatedItems || []).some(
-    (item) => (item.comboId === 'c4' && item.totalQuantity >= 1) || (item.comboId === 'c2' && item.totalQuantity >= 2)
-  );
-
   return (
-    <div className="screen">
-      <StatusBar />
-      <Header title="Bắp & Nước cá nhân" onBack={goBack} />
+    <div className="screen" style={{ background: '#F5F5F5' }}>
+      <Header title="Chọn combo" onBack={goBack} />
 
-      <CountdownBanner initialSeconds={380} label="Thời gian chọn combo:" />
+      <CountdownBanner
+        initialSeconds={397}
+        label="Thời gian giữ ghế:"
+        expiresAt={holdExpiresAt}
+      />
 
-      <div className="body" style={{ paddingBottom: 90 }}>
-        {/* Section: Individual Combos */}
-        <div className="section-heading">Bắp nước cá nhân của bạn</div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '0 16px 8px' }}>
-          Mỗi thành viên tự chọn combo yêu thích, tiền sẽ tính riêng và cập nhật tức thì.
-        </div>
+      <div className="body" style={{ padding: '16px 0 100px 0', background: '#F5F5F5' }}>
+        {COMBOS.map((combo) => {
+          const qty = comboQty[combo.id] || 0;
 
-        {combos.map((c) => (
-          <div className="fnb-card" key={c.id}>
-            <div className="fnb-img">{c.icon}</div>
-            <div className="fnb-info">
-              <div className="fnb-name">{c.name}</div>
-              <div className="fnb-desc">{c.desc}</div>
-              <div className="fnb-price">{formatMoney(c.price)}</div>
-              <div className="stepper">
-                <button
-                  className="stepper-btn"
-                  onClick={() => updateComboQty(c.id, -1)}
-                  disabled={!comboQty[c.id]}
-                  style={{ opacity: !comboQty[c.id] ? 0.4 : 1 }}
-                >
-                  −
-                </button>
-                <span className="stepper-count">{comboQty[c.id] || 0}</span>
-                <button className="stepper-btn" onClick={() => updateComboQty(c.id, 1)}>
-                  +
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+          // Check if other members in the group already picked this combo to prevent duplicate orders
+          const otherMembersWhoSelected = (groupFnBSummary?.members || [])
+            .filter((m) => m.userId !== currentUser?.userId)
+            .map((m) => {
+              const item = m.items?.find((it) => it.comboId === combo.id);
+              if (item && item.quantity > 0) {
+                return `${m.memberName} chọn ×${item.quantity}`;
+              }
+              return null;
+            })
+            .filter((text): text is string => Boolean(text));
 
-        {/* Section: Group F&B Summary (Anti-duplication) */}
-        <div
-          className="section-heading"
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginTop: 18,
-          }}
-        >
-          <span>Tóm tắt F&B nhóm</span>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: 'var(--orange)',
-              background: 'rgba(245, 128, 32, 0.12)',
-              padding: '3px 8px',
-              borderRadius: 12,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
-          >
-            🛡️ Chống mua trùng
-          </span>
-        </div>
+          const duplicateNote =
+            otherMembersWhoSelected.length > 0
+              ? `Đã được ${otherMembersWhoSelected.join(', ')}`
+              : null;
 
-        <div style={{ padding: '0 16px 16px' }}>
-          <div
-            className="card"
-            style={{
-              margin: 0,
-              padding: 14,
-              background: 'var(--white)',
-              border: '1.5px solid var(--border)',
-              borderRadius: 12,
-            }}
-          >
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-              Đơn hàng tổng hợp cả nhóm — xem bạn bè đã chọn gì để không mua thừa:
-            </div>
+          return (
+            <div className="fnb-card" key={combo.id}>
+              <img
+                src={combo.image}
+                alt={combo.name}
+                className="fnb-img"
+                loading="lazy"
+              />
 
-            {/* Member rows */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {activeMembers.map((member) => {
-                const color = getMemberColorByKey(member.color_slot);
-                const isMe = member.user_id === currentUser?.userId;
-
-                // Lookup this member's F&B items in summary
-                const memberSummary = groupFnBSummary?.members?.find(
-                  (m) => m.userId === member.user_id || m.memberId === member.id
-                );
-
-                let fnbLabel = 'Chưa chọn bắp nước';
-                let fnbAmount = 0;
-
-                if (isMe) {
-                  // For current user, also reflect local optimistic comboQty
-                  const myItemStrings: string[] = [];
-                  let myLocalTotal = 0;
-                  combos.forEach((c) => {
-                    const q = comboQty[c.id] || 0;
-                    if (q > 0) {
-                      myItemStrings.push(`${c.name} × ${q}`);
-                      myLocalTotal += q * c.price;
-                    }
-                  });
-                  if (myItemStrings.length > 0) {
-                    fnbLabel = myItemStrings.join(', ');
-                    fnbAmount = myLocalTotal;
-                  } else {
-                    fnbLabel = 'Đang chọn...';
-                  }
-                } else if (memberSummary && memberSummary.items.length > 0) {
-                  fnbLabel = memberSummary.items.map((i) => `${i.comboName} × ${i.quantity}`).join(', ');
-                  fnbAmount = memberSummary.totalAmount;
-                } else {
-                  fnbLabel = 'Không dùng combo';
-                }
-
-                return (
-                  <div
-                    key={member.id || member.user_id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      paddingBottom: 8,
-                      borderBottom: '1px solid var(--border)',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        background: color.hex,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <div style={{ width: 68, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {member.name} {isMe ? '(Bạn)' : ''}
-                    </div>
-                    <div
-                      style={{
-                        flex: 1,
-                        fontSize: 12,
-                        color: fnbAmount > 0 ? 'var(--text-primary)' : 'var(--text-muted)',
-                        fontWeight: fnbAmount > 0 ? 500 : 400,
-                      }}
-                    >
-                      {fnbLabel}
-                    </div>
-                    {fnbAmount > 0 && (
-                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--navy)' }}>
-                        {formatMoney(fnbAmount)}
-                      </div>
-                    )}
+              <div className="fnb-info">
+                <div className="fnb-top-row">
+                  <div className="fnb-name" title={combo.name}>
+                    {combo.name}
                   </div>
-                );
-              })}
-            </div>
-
-            {/* Aggregate Group Chips */}
-            {groupFnBSummary && groupFnBSummary.aggregatedItems.length > 0 && (
-              <div
-                style={{
-                  marginTop: 12,
-                  paddingTop: 10,
-                  borderTop: '1px dashed var(--border)',
-                }}
-              >
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--navy)', marginBottom: 6 }}>
-                  🍿 TỔNG F&B CẢ PHÒNG ({totalFnBItems} phần — {formatMoney(groupFnBSummary.totalGroupAmount)}):
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {groupFnBSummary.aggregatedItems.map((item) => (
-                    <span
-                      key={item.comboId}
-                      style={{
-                        fontSize: 11,
-                        background: 'var(--surface)',
-                        border: '1px solid var(--border)',
-                        padding: '4px 8px',
-                        borderRadius: 6,
-                        fontWeight: 600,
-                        color: 'var(--text-primary)',
-                      }}
+                  <div className="stepper">
+                    <button
+                      type="button"
+                      className="stepper-btn"
+                      onClick={() => updateComboQty(combo.id, -1)}
+                      disabled={qty === 0}
+                      aria-label="Giảm số lượng"
                     >
-                      {item.comboName}: <strong style={{ color: 'var(--orange)' }}>×{item.totalQuantity}</strong>
-                    </span>
-                  ))}
+                      −
+                    </button>
+                    <span className="stepper-count">{qty}</span>
+                    <button
+                      type="button"
+                      className="stepper-btn"
+                      onClick={() => updateComboQty(combo.id, 1)}
+                      aria-label="Tăng số lượng"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {/* Smart Anti-Duplication Advice */}
-            <div
-              style={{
-                marginTop: 12,
-                padding: '8px 10px',
-                borderRadius: 8,
-                fontSize: 11,
-                lineHeight: 1.4,
-                background: totalFnBItems > memberCount || hasMultipleBigCombos ? '#FFF7ED' : '#F0F9FF',
-                border: totalFnBItems > memberCount || hasMultipleBigCombos ? '1px solid #FFEDD5' : '1px solid #E0F2FE',
-                color: totalFnBItems > memberCount || hasMultipleBigCombos ? '#9A3412' : '#0369A1',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 6,
-              }}
-            >
-              <span>{totalFnBItems > memberCount || hasMultipleBigCombos ? '⚠️' : '💡'}</span>
-              <span>
-                {totalFnBItems > memberCount || hasMultipleBigCombos
-                  ? `Nhóm có ${memberCount} người nhưng đang chọn ${totalFnBItems} phần bắp nước. Các bạn có thể chia sẻ combo lớn cùng nhau để tiết kiệm chi phí!`
-                  : 'Mỗi bạn tự chọn phần ăn riêng của mình. Bảng này hiển thị realtime để cả nhóm không ai đặt trùng combo!'}
-              </span>
+                <div className="fnb-desc" title={combo.desc}>
+                  {combo.desc}
+                </div>
+
+                <div className="fnb-price">{formatMoney(combo.price)}</div>
+
+                {duplicateNote && (
+                  <div>
+                    <span className="fnb-duplicate-tag">
+                      {duplicateNote}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })}
       </div>
 
-      {/* Bottom Bar: Total per Member & Continue */}
-      <div className="bottom-bar">
-        <div className="info">
-          <div className="label">
-            Phần của bạn ({mySeats.length} ghế + {Object.values(comboQty).reduce((a, b) => a + b, 0)} combo):
+      {/* Sticky Bottom Bar */}
+      <div className="fnb-sticky-bottom">
+        <div className="fnb-bottom-summary">
+          <div className="fnb-bottom-seats">
+            {mySeats.length > 0
+              ? `${mySeats.length}x ghế: ${mySeats.join(', ')}`
+              : '2x ghế: G9, G8'}
           </div>
-          <div className="value">{formatMoney(total)}</div>
+          <div className="fnb-bottom-total">
+            Tổng Cộng:
+            <span className="fnb-bottom-total-num">{formatMoney(total > 0 ? total : 100000)}</span>
+          </div>
         </div>
-        <button className="cta-primary" onClick={() => goTo('screen-payment')}>
-          Thanh toán →
+        <button
+          type="button"
+          className="fnb-bottom-cta"
+          onClick={() => goTo('screen-payment')}
+        >
+          Tiếp tục
         </button>
       </div>
     </div>
