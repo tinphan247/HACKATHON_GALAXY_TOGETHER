@@ -86,28 +86,41 @@ const UPCOMING_MOVIES: Movie[] = [
   },
 ];
 
+import { movieRepository } from '../services/data/movieRepository';
+
 export const HomeScreen: React.FC = () => {
-  const { goTo, startSoloBooking } = useGroupSession();
+  const { goTo, startSoloBooking, selectMovie } = useGroupSession();
   const [activeTab, setActiveTab] = useState<MovieCategoryTab>('now_showing');
   const [currentCity, setCurrentCity] = useState<string>('TP Hồ Chí Minh');
   const [isCityModalOpen, setIsCityModalOpen] = useState<boolean>(false);
   const [isTogetherPopupOpen, setIsTogetherPopupOpen] = useState<boolean>(true);
+  const [nowShowingMovies, setNowShowingMovies] = useState<Movie[]>([]);
+  const [upcomingMovies, setUpcomingMovies] = useState<Movie[]>([]);
 
-  // Handle movie card click
-  const handleSelectMovie = (movie: Movie) => {
-    startSoloBooking({
-      movieId: movie.id,
-      movieTitle: movie.title,
+  React.useEffect(() => {
+    movieRepository.getMovies('now_showing').then((list) => {
+      setNowShowingMovies(list as any);
     });
+    movieRepository.getMovies('upcoming').then((list) => {
+      setUpcomingMovies(list as any);
+    });
+  }, []);
+
+  // Handle movie card click with DATA-DRIVEN selection
+  const handleSelectMovie = async (movie: Movie) => {
+    startSoloBooking();
+    await selectMovie(movie.id);
     goTo('screen-showtimes');
   };
 
   // Handle banner click
-  const handleBannerClick = (banner: BannerItem) => {
+  const handleBannerClick = async (banner: BannerItem) => {
     startSoloBooking();
     if (banner.deeplink) {
+      await selectMovie('mv-hope');
       goTo(banner.deeplink as any);
     } else {
+      await selectMovie('mv-01');
       goTo('screen-showtimes');
     }
   };
@@ -144,7 +157,7 @@ export const HomeScreen: React.FC = () => {
         {activeTab === 'now_showing' ? (
           <div className="home-movies-container">
             <div className="production-movie-grid">
-              {NOW_SHOWING_MOVIES.map((movie) => (
+              {(nowShowingMovies.length > 0 ? nowShowingMovies : NOW_SHOWING_MOVIES).map((movie) => (
                 <MovieCard
                   key={movie.id}
                   movie={movie}
@@ -156,7 +169,7 @@ export const HomeScreen: React.FC = () => {
         ) : (
           <div className="home-movies-container">
             <div className="production-movie-grid">
-              {UPCOMING_MOVIES.map((movie) => (
+              {(upcomingMovies.length > 0 ? upcomingMovies : UPCOMING_MOVIES).map((movie) => (
                 <MovieCard
                   key={movie.id}
                   movie={movie}

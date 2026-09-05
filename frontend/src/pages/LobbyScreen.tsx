@@ -2,7 +2,6 @@ import React from 'react';
 import { useGroupSession } from '../context/GroupSessionContext';
 import { StatusBar } from '../components/common/StatusBar';
 import { Header } from '../components/common/Header';
-import { SimulationBar } from '../components/simulation/SimulationBar';
 import { OfflineBanner } from '../components/common/OfflineBanner';
 
 export const LobbyScreen: React.FC = () => {
@@ -14,11 +13,16 @@ export const LobbyScreen: React.FC = () => {
     displayMembers,
     isBackendHealthy,
     realtimeStatus,
+    selectedShowtime,
   } = useGroupSession();
 
   const currentCount = sessionData?.members?.length || 1;
   const maxMembers = sessionData?.max_members || 4;
-  const code = inviteCode || sessionData?.invite?.code || 'GTH-LIVE';
+  const code = inviteCode || sessionData?.invite?.code || 'GLX-GRP';
+  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Phim đã chọn';
+  const showTime = sessionData?.show_time || selectedShowtime?.showTime || '21:00';
+  const showDate = sessionData?.show_date || selectedShowtime?.showDate || '';
+  const cinemaName = sessionData?.cinema_name || selectedShowtime?.cinemaName || 'Galaxy Cinema';
 
   const isWsConnected = realtimeStatus === 'CONNECTED';
   const statusColor = isWsConnected ? '#10B981' : realtimeStatus === 'RECONNECTING' ? '#F59E0B' : '#CA8A04';
@@ -68,8 +72,7 @@ export const LobbyScreen: React.FC = () => {
             {sessionData?.name || 'Friday Movie Night'} • Mã: {code}
           </div>
           <div className="meta">
-            {sessionData?.movie_title || 'Quý Tử Vượt Giàu'} • {sessionData?.show_time || '21:00'} •{' '}
-            {sessionData?.cinema_name || 'Galaxy Nguyễn Văn Quá'}
+            {movieTitle} • {showTime} • {cinemaName}
           </div>
         </div>
       </div>
@@ -78,9 +81,6 @@ export const LobbyScreen: React.FC = () => {
       <div className="activity-ticker visible" id="lobby-ticker">
         📡 {currentCount >= 2 ? `Đã có ${currentCount} thành viên trong phòng!` : 'Đang chờ bạn bè quét mã tham gia...'}
       </div>
-
-      {/* Simulation Bar */}
-      <SimulationBar />
 
       <div className="body">
         <div className="section-heading">
@@ -142,13 +142,13 @@ export const LobbyScreen: React.FC = () => {
             <div className="card" style={{ margin: 0, padding: '10px 12px' }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Phim</div>
               <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
-                {sessionData?.movie_title || 'Quý Tử Vượt Giàu'}
+                {movieTitle}
               </div>
             </div>
             <div className="card" style={{ margin: 0, padding: '10px 12px' }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Suất chiếu</div>
               <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
-                {sessionData?.show_time || '21:00'} • {sessionData?.show_date || '07/09'}
+                {showTime} • {showDate}
               </div>
             </div>
             <div className="card" style={{ margin: 0, padding: '10px 12px' }}>

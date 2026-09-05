@@ -96,6 +96,25 @@ export const groupSessionService = {
   },
 
   /**
+   * Get all occupied (sold or active held) seats for a showtime across all sessions
+   */
+  async getShowtimeOccupiedSeats(showtimeId: string): Promise<{
+    showtimeId: string;
+    soldSeatIds: string[];
+    heldSeatIds: string[];
+    holdsMap: Record<string, { seatId: string; sessionId: string; expiresAt: string }>;
+  }> {
+    return apiClient<{
+      showtimeId: string;
+      soldSeatIds: string[];
+      heldSeatIds: string[];
+      holdsMap: Record<string, { seatId: string; sessionId: string; expiresAt: string }>;
+    }>(`/api/group-sessions/showtimes/${encodeURIComponent(showtimeId)}/occupied-seats`, {
+      method: 'GET',
+    });
+  },
+
+  /**
    * Hold a seat
    */
   async holdSeat(

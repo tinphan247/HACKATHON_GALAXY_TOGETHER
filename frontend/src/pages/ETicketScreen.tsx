@@ -5,19 +5,47 @@ import { Header } from '../components/common/Header';
 import { RealQrCode } from '../components/common/RealQrCode';
 
 export const ETicketScreen: React.FC = () => {
-  const { sessionData, inviteCode, currentUser, displayMembers, heldSeats, mySeats, comboQty, comboPrices, resetToHome } = useGroupSession();
+  const {
+    sessionData,
+    inviteCode,
+    currentUser,
+    displayMembers,
+    heldSeats,
+    mySeats,
+    comboQty,
+    comboPrices,
+    resetToHome,
+    selectedShowtime,
+  } = useGroupSession();
 
-  const code = inviteCode || sessionData?.invite?.code || 'GTH-471';
+  const code = inviteCode || sessionData?.invite?.code || 'GLX-892';
   const mySeatStr = mySeats.length > 0 ? mySeats.join(' • ') : 'Ghế đã chọn';
   const mySeatCompact = mySeats.length > 0 ? mySeats.join('') : 'SEAT';
   const myName = currentUser?.name || 'TIN';
   const ticketPayload = `GLX-TICKET:${code}:${myName.toUpperCase()}:${mySeatCompact}`;
 
+  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Vé Điện Tử';
+  const cinemaName = sessionData?.cinema_name || selectedShowtime?.cinemaName || 'Galaxy Cinema';
+  const showDate = sessionData?.show_date || selectedShowtime?.showDate || '';
+  const showTime = sessionData?.show_time || selectedShowtime?.showTime || '21:00';
+  const screenName = sessionData?.screen_name || selectedShowtime?.screenName || 'Phòng chiếu';
+  const ageRating = selectedShowtime?.movieAgeRating || 'K';
+  const formatText = selectedShowtime?.format || '2D PHỤ ĐỀ';
+
+  const standardPrice = selectedShowtime?.ticketPriceStandard || 55000;
+  const vipPrice = selectedShowtime?.ticketPriceVip || 65000;
+  const vipRows = ['D', 'E', 'F'];
+
+  const seatTotal = mySeats.reduce((sum, s) => {
+    const row = s.charAt(0);
+    return sum + (vipRows.includes(row) ? vipPrice : standardPrice);
+  }, 0);
+
   const fnbTotal = Object.keys(comboQty).reduce(
     (sum, k) => sum + (comboQty[k] || 0) * (comboPrices[k] || 0),
     0
   );
-  const myTotal = mySeats.length * 55000 + fnbTotal || 55000;
+  const myTotal = seatTotal + fnbTotal || standardPrice;
   const formatMoney = (n: number) => n.toLocaleString('vi-VN') + 'đ';
 
   const otherMembers = displayMembers.filter((m) => m.status !== 'EMPTY' && m.userId !== currentUser?.userId);
@@ -30,11 +58,11 @@ export const ETicketScreen: React.FC = () => {
       <div className="body">
         <div className="ticket">
           <div className="ticket-header">
-            <div className="movie">{sessionData?.movie_title || 'QUÝ TỬ VƯỢT GIÀU'}</div>
-            <div className="cinema">{sessionData?.cinema_name || 'Galaxy Cinema Nguyễn Văn Quá'}</div>
+            <div className="movie">{movieTitle.toUpperCase()}</div>
+            <div className="cinema">{cinemaName}</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              <span className="badge badge-age">K</span>
-              <span className="badge badge-format">2D PHỤ ĐỀ</span>
+              <span className="badge badge-age">{ageRating}</span>
+              <span className="badge badge-format">{formatText}</span>
             </div>
           </div>
 
@@ -45,15 +73,15 @@ export const ETicketScreen: React.FC = () => {
             </div>
             <div className="ticket-row">
               <span className="ticket-label">Ngày chiếu</span>
-              <span className="ticket-value">{sessionData?.show_date || '07/09/2026'}</span>
+              <span className="ticket-value">{showDate}</span>
             </div>
             <div className="ticket-row">
               <span className="ticket-label">Giờ chiếu</span>
-              <span className="ticket-value">{sessionData?.show_time || '21:00'}</span>
+              <span className="ticket-value">{showTime}</span>
             </div>
             <div className="ticket-row">
               <span className="ticket-label">Rạp</span>
-              <span className="ticket-value">Phòng 3</span>
+              <span className="ticket-value">{screenName}</span>
             </div>
             <div className="ticket-row">
               <span className="ticket-label">Ghế</span>

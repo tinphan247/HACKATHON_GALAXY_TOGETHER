@@ -1,32 +1,121 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGroupSession } from '../context/GroupSessionContext';
 import { StatusBar } from '../components/common/StatusBar';
 import { Header } from '../components/common/Header';
+import { movieRepository } from '../services/data/movieRepository';
+import { showtimeRepository, type DateOption } from '../services/data/showtimeRepository';
+import type { Movie, Theater, Showtime } from '../types/booking';
+
+interface TheaterShowtimeGroup {
+  theater: Theater;
+  showtimes: Showtime[];
+}
 
 export const ShowtimeScreen: React.FC = () => {
-  const { goTo, goBack, selectedShowtime, startSoloBooking } = useGroupSession();
-  const [selectedTime, setSelectedTime] = useState(selectedShowtime.showTime || '21:00');
-  const [isAccordionOpen, setIsAccordionOpen] = useState(true);
+  const {
+    goTo,
+    goBack,
+    selectedMovieId,
+    selectedDate,
+    selectDate,
+    selectShowtimeById,
+    startSoloBooking,
+  } = useGroupSession();
 
-  const handleSelectTime = (time: string) => {
-    setSelectedTime(time);
-    console.log('[Showtime] user selected time:', time, '-> entering SOLO seat selection');
-    startSoloBooking({
-      showTime: time,
-    });
+  const [movie, setMovie] = useState<Movie | null>(null);
+  const [availableDates, setAvailableDates] = useState<DateOption[]>([]);
+  const [theaterGroups, setTheaterGroups] = useState<TheaterShowtimeGroup[]>([]);
+  const [expandedTheaters, setExpandedTheaters] = useState<Record<string, boolean>>({});
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // 1. Fetch movie & available dates when selectedMovieId changes
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoading(true);
+
+    const loadData = async () => {
+      const currentMovie = await movieRepository.getMovieById(selectedMovieId);
+      const dates = await showtimeRepository.getAvailableDatesForMovie(selectedMovieId);
+
+      if (!isMounted) return;
+      setMovie(currentMovie);
+      setAvailableDates(dates);
+
+      // If current selectedDate is not in available dates, fallback to first date
+      const hasDate = dates.some((d) => d.date === selectedDate);
+      if (!hasDate && dates.length > 0) {
+        await selectDate(dates[0].date);
+      }
+      setIsLoading(false);
+    };
+
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedMovieId]);
+
+  // 2. Fetch theaters & showtimes when selectedDate changes
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadShowtimes = async () => {
+      if (!selectedMovieId || !selectedDate) return;
+
+      const theaters = await showtimeRepository.getTheatersForMovieAndDate(selectedMovieId, selectedDate);
+      const groups: TheaterShowtimeGroup[] = [];
+
+      for (const t of theaters) {
+        const sts = await showtimeRepository.getShowtimes({
+          movieId: selectedMovieId,
+          date: selectedDate,
+          theaterId: t.id,
+        });
+        groups.push({
+          theater: t,
+          showtimes: sts,
+        });
+      }
+
+      if (!isMounted) return;
+      setTheaterGroups(groups);
+
+      // Auto-expand first theater
+      if (groups.length > 0) {
+        setExpandedTheaters({ [groups[0].theater.id]: true });
+      }
+    };
+
+    loadShowtimes();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedMovieId, selectedDate]);
+
+  // Toggle accordion
+  const toggleTheaterAccordion = (theaterId: string) => {
+    setExpandedTheaters((prev) => ({
+      ...prev,
+      [theaterId]: !prev[theaterId],
+    }));
+  };
+
+  // Handle select showtime slot
+  const handleSelectShowtime = async (showtime: Showtime) => {
+    console.log('[Showtime] User selected showtime:', showtime.id, showtime.startTime);
+    startSoloBooking();
+    await selectShowtimeById(showtime.id);
     goTo('screen-seats');
   };
 
-  const showtimes = [
-    '09:00', '10:45', '12:00', '13:00', '14:15', '15:15',
-    '17:30', '18:45', '19:45', '20:15', '21:00', '22:00',
-  ];
+  const movieTitle = movie?.title || 'Lịch Chiếu Phim';
+  const ageRating = movie?.ageRating || 'K';
 
   return (
     <div className="screen">
       <StatusBar />
       <Header
-        title="Quý Tử Vượt Giàu"
+        title={movieTitle}
         onBack={goBack}
         rightAction={
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B3B60" strokeWidth="2">
@@ -57,7 +146,7 @@ export const ShowtimeScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter row */}
+      {/* Filter row: City & Format */}
       <div style={{ display: 'flex', gap: 10, padding: '12px 16px', flexShrink: 0 }}>
         <div
           style={{
@@ -87,87 +176,99 @@ export const ShowtimeScreen: React.FC = () => {
             alignItems: 'center',
           }}
         >
-          Cinema <span>▾</span>
+          Tất cả rạp <span>▾</span>
         </div>
       </div>
 
-      {/* Date strip */}
-      <div className="date-strip">
-        <div className="date-card active">
-          <div className="day">Thứ Hai</div>
-          <div className="num">07/09</div>
-        </div>
-        <div className="date-card">
-          <div className="day">Thứ Ba</div>
-          <div className="num">08/09</div>
-        </div>
-        <div className="date-card">
-          <div className="day">Thứ Tư</div>
-          <div className="num">09/09</div>
-        </div>
-        <div className="date-card">
-          <div className="day">Thứ Năm</div>
-          <div className="num">10/09</div>
-        </div>
-        <div className="date-card">
-          <div className="day">Thứ Sáu</div>
-          <div className="num">11/09</div>
-        </div>
-      </div>
-      <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', paddingBottom: 8, flexShrink: 0 }}>
-        Thứ Hai 07, tháng 9 2026
-      </div>
-
-      <div className="body">
-        {/* Cinema accordion */}
-        <div className="cinema-item">
-          <div className="cinema-header" onClick={() => setIsAccordionOpen(!isAccordionOpen)}>
-            <div>
-              <div className="cinema-name">Galaxy Cinema Nguyễn Văn Quá</div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="cinema-km">📍 2.2 km</span>
-              <span>{isAccordionOpen ? '^' : 'v'}</span>
-            </div>
-          </div>
-
-          {isAccordionOpen && (
-            <div className="cinema-content open">
-              <div className="format-label">2D PHỤ ĐỀ</div>
-              <div className="showtime-grid">
-                {showtimes.map((t) => (
-                  <div
-                    key={t}
-                    className={`showtime-btn ${selectedTime === t ? 'selected' : ''}`}
-                    onClick={() => handleSelectTime(t)}
-                  >
-                    {t}
-                  </div>
-                ))}
+      {/* Dynamic Date strip */}
+      {availableDates.length > 0 ? (
+        <div className="date-strip">
+          {availableDates.map((d) => {
+            const isActive = d.date === selectedDate;
+            return (
+              <div
+                key={d.date}
+                className={`date-card ${isActive ? 'active' : ''}`}
+                onClick={() => selectDate(d.date)}
+              >
+                <div className="day">{d.dayOfWeek}</div>
+                <div className="num">{d.numDisplay}</div>
               </div>
-            </div>
-          )}
+            );
+          })}
         </div>
+      ) : (
+        <div style={{ padding: '12px 16px', textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
+          Chưa có lịch chiếu cho phim này.
+        </div>
+      )}
 
-        <div className="cinema-item">
-          <div className="cinema-header">
-            <div className="cinema-name">Galaxy Cinema Kinh Dương Vương</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="cinema-km">📍 3.5 km</span>
-              <span>v</span>
-            </div>
-          </div>
+      {/* Sub-label for selected date */}
+      {availableDates.find((d) => d.date === selectedDate) && (
+        <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', paddingBottom: 8, flexShrink: 0 }}>
+          {availableDates.find((d) => d.date === selectedDate)?.dayOfWeek},{' '}
+          {availableDates.find((d) => d.date === selectedDate)?.numDisplay}
         </div>
+      )}
 
-        <div className="cinema-item">
-          <div className="cinema-header">
-            <div className="cinema-name">Galaxy Cinema Tân Bình</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="cinema-km">📍 4.5 km</span>
-              <span>v</span>
-            </div>
+      {/* Main Body */}
+      <div className="body">
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-muted)', fontSize: 13 }}>
+            Đang tải suất chiếu...
           </div>
-        </div>
+        ) : theaterGroups.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-muted)', fontSize: 13 }}>
+            Không có suất chiếu cho ngày này. Vui lòng chọn ngày khác.
+          </div>
+        ) : (
+          theaterGroups.map(({ theater, showtimes }) => {
+            const isOpen = !!expandedTheaters[theater.id];
+
+            return (
+              <div className="cinema-item" key={theater.id}>
+                <div
+                  className="cinema-header"
+                  onClick={() => toggleTheaterAccordion(theater.id)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div>
+                    <div className="cinema-name">{theater.name}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {theater.distanceKm && (
+                      <span className="cinema-km">📍 {theater.distanceKm} km</span>
+                    )}
+                    <span>{isOpen ? '^' : 'v'}</span>
+                  </div>
+                </div>
+
+                {isOpen && (
+                  <div className="cinema-content open">
+                    {/* Formats present for this theater */}
+                    <div className="format-label">
+                      {showtimes[0]?.format || '2D PHỤ ĐỀ'} • {ageRating}
+                    </div>
+
+                    <div className="showtime-grid">
+                      {showtimes.map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          className="showtime-btn"
+                          onClick={() => handleSelectShowtime(st)}
+                          title={`${st.screenName} - ${st.ticketPriceStandard.toLocaleString('vi-VN')}đ`}
+                        >
+                          {st.startTime}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

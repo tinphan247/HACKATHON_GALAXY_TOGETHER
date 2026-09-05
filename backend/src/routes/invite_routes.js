@@ -15,7 +15,7 @@ router.get('/:code', async (req, res, next) => {
     const code = req.params.code.toUpperCase().trim();
     const inviteRes = await pool.query(
       `SELECT i.code, i.qr_payload, i.expires_at, s.id as session_id, s.name as session_name,
-              s.movie_title, s.cinema_name, s.show_date, s.show_time, s.screen_name,
+              s.movie_id, s.movie_title, s.cinema_name, s.show_date, s.show_time, s.screen_name,
               s.host_name, s.max_members, s.status,
               (SELECT count(*) FROM group_members gm WHERE gm.group_session_id = s.id AND gm.status != 'LEFT') as current_members
        FROM invites i

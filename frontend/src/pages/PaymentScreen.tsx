@@ -3,7 +3,6 @@ import { useGroupSession } from '../context/GroupSessionContext';
 import { StatusBar } from '../components/common/StatusBar';
 import { Header } from '../components/common/Header';
 import { CountdownBanner } from '../components/common/CountdownBanner';
-import { SimulationBar } from '../components/simulation/SimulationBar';
 import { getMemberColorByKey } from '../constants/theme';
 import type { PaymentMethod } from '../types/session';
 
@@ -30,6 +29,7 @@ export const PaymentScreen: React.FC = () => {
     payForMember,
     payHostAllGroup,
     sessionData,
+    selectedShowtime,
   } = useGroupSession();
 
   const [modalTarget, setModalTarget] = useState<PayModalTarget | null>(null);
@@ -47,12 +47,20 @@ export const PaymentScreen: React.FC = () => {
 
   const isHost = currentUser?.isHost ?? true;
 
+  // Dynamic ticket price by seat type
+  const standardPrice = selectedShowtime?.ticketPriceStandard || 55000;
+  const vipPrice = selectedShowtime?.ticketPriceVip || 65000;
+  const vipRows = ['D', 'E', 'F'];
+
   // Local fallback calculations if summary is still loading
   const fnbTotal = Object.keys(comboQty).reduce(
     (sum, k) => sum + (comboQty[k] || 0) * (comboPrices[k] || 0),
     0
   );
-  const mySeatTotal = mySeats.length * 55000;
+  const mySeatTotal = mySeats.reduce((sum, s) => {
+    const row = s.charAt(0);
+    return sum + (vipRows.includes(row) ? vipPrice : standardPrice);
+  }, 0);
   const myLocalTotal = mySeatTotal + fnbTotal;
 
   const formatMoney = (n: number) => n.toLocaleString('vi-VN') + 'đ';
@@ -129,7 +137,6 @@ export const PaymentScreen: React.FC = () => {
       />
 
       <CountdownBanner initialSeconds={300} label="Thời gian thanh toán còn lại:" />
-      <SimulationBar />
 
       <div className="body" style={{ paddingBottom: 90 }}>
         {/* Payment Mode Indicator */}

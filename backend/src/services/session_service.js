@@ -424,12 +424,32 @@ export class SessionService {
   }
 
   /**
+   * Automatically release any expired seat holds
+   */
+  static async cleanupExpiredHolds() {
+    try {
+      const res = await pool.query(
+        `UPDATE seat_holds SET status = 'released' WHERE status = 'held' AND expires_at <= NOW()`
+      );
+      return res.rowCount;
+    } catch (err) {
+      console.error('Failed to clean up expired seat holds:', err);
+      return 0;
+    }
+  }
+
+  /**
    * Hold a seat atomically for a member
    */
   static async holdSeat(sessionId, { showtimeId, seatId, seatCode, seatType = 'standard', price = 55000, userId }) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+
+      // 0. Clean up any expired holds immediately within transaction so they don't block new holds
+      await client.query(
+        `UPDATE seat_holds SET status = 'released' WHERE status = 'held' AND expires_at <= NOW()`
+      );
 
       // 1. Verify session exists and is active
       const sessionRes = await client.query(
@@ -456,10 +476,10 @@ export class SessionService {
       }
       const member = memberRes.rows[0];
 
-      // 3. Check if seat is already held or sold
+      // 3. Check if seat is actively held or sold
       const conflictRes = await client.query(
         `SELECT id, group_member_id FROM seat_holds 
-         WHERE showtime_id = $1 AND seat_id = $2 AND status IN ('held', 'sold') FOR UPDATE`,
+         WHERE showtime_id = $1 AND seat_id = $2 AND (status = 'sold' OR (status = 'held' AND expires_at > NOW())) FOR UPDATE`,
         [actualShowtimeId, seatId]
       );
 
@@ -650,18 +670,63 @@ export class SessionService {
    * Get all active held seats for a session
    */
   static async getSessionSeats(sessionId) {
+    // Release any expired holds first
+    await this.cleanupExpiredHolds();
+
     const res = await pool.query(
       `SELECT sh.id, sh.seat_id, sh.seat_code, sh.seat_type, sh.price, sh.status,
               gm.id as member_id, gm.user_id, gm.name as member_name, gm.role, gm.color_slot,
               (gm.role = 'host') as is_host
        FROM seat_holds sh
        JOIN group_members gm ON sh.group_member_id = gm.id
-       WHERE sh.group_session_id = $1 AND sh.status = 'held'
+       WHERE sh.group_session_id = $1 AND sh.status = 'held' AND (sh.expires_at IS NULL OR sh.expires_at > NOW())
        ORDER BY sh.held_at ASC`,
       [sessionId]
     );
 
     return res.rows;
+  }
+
+  /**
+   * Get all occupied (sold or actively held) seats for a specific showtime across all sessions
+   */
+  static async getShowtimeOccupiedSeats(showtimeId) {
+    await this.cleanupExpiredHolds();
+
+    const res = await pool.query(
+      `SELECT seat_id, status, group_session_id, expires_at
+       FROM seat_holds
+       WHERE showtime_id = $1 AND (status = 'sold' OR (status = 'held' AND (expires_at IS NULL OR expires_at > NOW())))`,
+      [showtimeId]
+    );
+
+    const soldSeatIds = [];
+    const heldSeatIds = [];
+    const holdsMap = {};
+
+    for (const row of res.rows) {
+      if (row.status === 'sold') {
+        if (!soldSeatIds.includes(row.seat_id)) {
+          soldSeatIds.push(row.seat_id);
+        }
+      } else if (row.status === 'held') {
+        if (!heldSeatIds.includes(row.seat_id)) {
+          heldSeatIds.push(row.seat_id);
+        }
+        holdsMap[row.seat_id] = {
+          seatId: row.seat_id,
+          sessionId: row.group_session_id,
+          expiresAt: row.expires_at,
+        };
+      }
+    }
+
+    return {
+      showtimeId,
+      soldSeatIds,
+      heldSeatIds,
+      holdsMap
+    };
   }
 
   /**

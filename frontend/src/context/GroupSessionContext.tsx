@@ -20,6 +20,9 @@ import { POLLING_INTERVAL_MS } from '../constants/config';
 import { useToast } from './ToastContext';
 import { useSessionRealtime } from '../hooks/useSessionRealtime';
 import { realtimeService, type RealtimeStatus } from '../services/realtimeService';
+import { movieRepository } from '../services/data/movieRepository';
+import { theaterRepository } from '../services/data/theaterRepository';
+import { showtimeRepository } from '../services/data/showtimeRepository';
 
 interface GroupSessionContextType {
   currentScreen: ScreenId;
@@ -42,9 +45,16 @@ interface GroupSessionContextType {
   displayMembers: DisplayMember[];
   isHost: boolean;
 
-  // Selected Showtime
+  // Selected Showtime & Data-Driven Selection State
   selectedShowtime: ShowtimeSelection;
   setSelectedShowtime: (s: ShowtimeSelection) => void;
+  selectedMovieId: string;
+  selectedDate: string;
+  selectedTheaterId: string;
+  selectMovie: (movieId: string) => Promise<void>;
+  selectDate: (date: string) => Promise<void>;
+  selectTheater: (theaterId: string) => Promise<void>;
+  selectShowtimeById: (showtimeId: string) => Promise<void>;
 
   // Connection & Modes
   isLiveApi: boolean;
@@ -144,6 +154,9 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Active Group Mode: strictly true only when explicitly in GROUP mode AND sessionId is present
   const isGroupMode = bookingMode === 'GROUP' && !!sessionId;
 
+  const [selectedMovieId, setSelectedMovieId] = useState<string>('mv-01');
+  const [selectedDate, setSelectedDate] = useState<string>('2026-09-07');
+  const [selectedTheaterId, setSelectedTheaterId] = useState<string>('cin-nvq');
   const [selectedShowtime, setSelectedShowtime] = useState<ShowtimeSelection>(DEFAULT_SHOWTIME);
   const [isBackendHealthy, setIsBackendHealthy] = useState<boolean>(true);
   const [isLiveApi, setIsLiveApi] = useState<boolean>(true);
@@ -154,6 +167,169 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isHoldTimerStarted, setIsHoldTimerStarted] = useState<boolean>(false);
   const [holdExpiresAt, setHoldExpiresAt] = useState<Date | null>(null);
   const [soloSeats, setSoloSeats] = useState<string[]>([]);
+
+  // Cascading Selection: Select Movie
+  const selectMovie = useCallback(async (movieId: string) => {
+    console.log('[DataFlow] Selecting movie:', movieId);
+    setSelectedMovieId(movieId);
+
+    // Reset downstream selections: seats, solo holds, group state
+    setSoloSeats([]);
+    setHeldSeats({});
+    setComboQty({ c1: 0, c2: 0, c3: 0, c4: 0 });
+
+    const movie = await movieRepository.getMovieById(movieId);
+    const availableDates = await showtimeRepository.getAvailableDatesForMovie(movieId);
+    const nextDate = availableDates.length > 0 ? availableDates[0].date : '2026-09-07';
+    setSelectedDate(nextDate);
+
+    const availableTheaters = await showtimeRepository.getTheatersForMovieAndDate(movieId, nextDate);
+    const nextTheater = availableTheaters.length > 0 ? availableTheaters[0] : null;
+    const nextTheaterId = nextTheater ? nextTheater.id : 'cin-nvq';
+    setSelectedTheaterId(nextTheaterId);
+
+    let nextShowtime = null;
+    if (nextTheater) {
+      const showtimes = await showtimeRepository.getShowtimes({
+        movieId,
+        date: nextDate,
+        theaterId: nextTheaterId,
+      });
+      nextShowtime = showtimes.length > 0 ? showtimes[0] : null;
+    }
+
+    setSelectedShowtime({
+      movieId,
+      movieTitle: movie?.title || 'Phim Galaxy',
+      moviePoster: movie?.poster || '/posters/poster_quytuvuotgiau.jpg',
+      movieAgeRating: movie?.ageRating || 'K',
+      cinemaId: nextTheaterId,
+      cinemaName: nextTheater?.name || 'Galaxy Cinema',
+      showDate: nextDate,
+      showTime: nextShowtime?.startTime || '21:00',
+      showtimeId: nextShowtime?.id || '',
+      screenName: nextShowtime?.screenName || 'Phòng 3',
+      screenId: nextShowtime?.screenId || '',
+      format: nextShowtime?.format || '2D PHỤ ĐỀ',
+      ticketPriceStandard: nextShowtime?.ticketPriceStandard || 55000,
+      ticketPriceVip: nextShowtime?.ticketPriceVip || 65000,
+    });
+  }, []);
+
+  // Cascading Selection: Select Date
+  const selectDate = useCallback(async (date: string) => {
+    console.log('[DataFlow] Selecting date:', date);
+    setSelectedDate(date);
+
+    // Reset downstream: seats
+    setSoloSeats([]);
+    setHeldSeats({});
+
+    const availableTheaters = await showtimeRepository.getTheatersForMovieAndDate(selectedMovieId, date);
+    let targetTheaterId = selectedTheaterId;
+    let targetTheater = availableTheaters.find((t) => t.id === targetTheaterId);
+
+    if (!targetTheater && availableTheaters.length > 0) {
+      targetTheater = availableTheaters[0];
+      targetTheaterId = targetTheater.id;
+      setSelectedTheaterId(targetTheaterId);
+    }
+
+    if (targetTheater) {
+      const showtimes = await showtimeRepository.getShowtimes({
+        movieId: selectedMovieId,
+        date,
+        theaterId: targetTheaterId,
+      });
+      const nextShowtime = showtimes.length > 0 ? showtimes[0] : null;
+
+      setSelectedShowtime((prev) => ({
+        ...prev,
+        showDate: date,
+        cinemaId: targetTheaterId,
+        cinemaName: targetTheater?.name || prev.cinemaName,
+        showTime: nextShowtime?.startTime || '21:00',
+        showtimeId: nextShowtime?.id || '',
+        screenName: nextShowtime?.screenName || prev.screenName,
+        screenId: nextShowtime?.screenId || prev.screenId,
+        format: nextShowtime?.format || prev.format,
+        ticketPriceStandard: nextShowtime?.ticketPriceStandard || prev.ticketPriceStandard,
+        ticketPriceVip: nextShowtime?.ticketPriceVip || prev.ticketPriceVip,
+      }));
+    } else {
+      setSelectedShowtime((prev) => ({
+        ...prev,
+        showDate: date,
+        showtimeId: '',
+      }));
+    }
+  }, [selectedMovieId, selectedTheaterId]);
+
+  // Cascading Selection: Select Theater
+  const selectTheater = useCallback(async (theaterId: string) => {
+    console.log('[DataFlow] Selecting theater:', theaterId);
+    setSelectedTheaterId(theaterId);
+
+    // Reset downstream: seats
+    setSoloSeats([]);
+    setHeldSeats({});
+
+    const theater = await theaterRepository.getTheaterById(theaterId);
+    const showtimes = await showtimeRepository.getShowtimes({
+      movieId: selectedMovieId,
+      date: selectedDate,
+      theaterId,
+    });
+    const nextShowtime = showtimes.length > 0 ? showtimes[0] : null;
+
+    setSelectedShowtime((prev) => ({
+      ...prev,
+      cinemaId: theaterId,
+      cinemaName: theater?.name || prev.cinemaName,
+      showTime: nextShowtime?.startTime || '21:00',
+      showtimeId: nextShowtime?.id || '',
+      screenName: nextShowtime?.screenName || prev.screenName,
+      screenId: nextShowtime?.screenId || prev.screenId,
+      format: nextShowtime?.format || prev.format,
+      ticketPriceStandard: nextShowtime?.ticketPriceStandard || prev.ticketPriceStandard,
+      ticketPriceVip: nextShowtime?.ticketPriceVip || prev.ticketPriceVip,
+    }));
+  }, [selectedMovieId, selectedDate]);
+
+  // Cascading Selection: Select Showtime By ID
+  const selectShowtimeById = useCallback(async (showtimeId: string) => {
+    console.log('[DataFlow] Selecting showtime by ID:', showtimeId);
+    const st = await showtimeRepository.getShowtimeById(showtimeId);
+    if (!st) return;
+
+    // Reset downstream: seats
+    setSoloSeats([]);
+    setHeldSeats({});
+
+    const movie = await movieRepository.getMovieById(st.movieId);
+    const theater = await theaterRepository.getTheaterById(st.theaterId);
+
+    setSelectedMovieId(st.movieId);
+    setSelectedDate(st.date);
+    setSelectedTheaterId(st.theaterId);
+
+    setSelectedShowtime({
+      movieId: st.movieId,
+      movieTitle: movie?.title || 'Phim Galaxy',
+      moviePoster: movie?.poster || '/posters/poster_quytuvuotgiau.jpg',
+      movieAgeRating: movie?.ageRating || 'K',
+      cinemaId: st.theaterId,
+      cinemaName: theater?.name || 'Galaxy Cinema',
+      showDate: st.date,
+      showTime: st.startTime,
+      showtimeId: st.id,
+      screenName: st.screenName,
+      screenId: st.screenId,
+      format: st.format,
+      ticketPriceStandard: st.ticketPriceStandard,
+      ticketPriceVip: st.ticketPriceVip,
+    });
+  }, []);
 
   // Start Solo Booking: explicitly clears any group state and switches to SOLO mode
   const startSoloBooking = useCallback((showtimeUpdate?: Partial<ShowtimeSelection>) => {
@@ -507,8 +683,9 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           isHost: true,
         };
 
+        const effectiveShowtimeId = selectedShowtime.showtimeId || selectedShowtime.showTime;
         const resp = await groupSessionService.createSession({
-          showtimeId: selectedShowtime.showTime,
+          showtimeId: effectiveShowtimeId,
           cinemaId: selectedShowtime.cinemaId,
           cinemaName: selectedShowtime.cinemaName,
           movieId: selectedShowtime.movieId,
@@ -543,12 +720,13 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         await refreshSessionData(newSessionId);
         await loadSessionSeats(newSessionId);
 
-        // If host previously selected a solo seat, hold it in group session
+        // If host previously selected seats, only carry over the 1st seat for group mode (1 seat per member)
         if (soloSeats.length > 0) {
           const firstSeat = soloSeats[0];
+          setSoloSeats([firstSeat]);
           try {
             await groupSessionService.holdSeat(newSessionId, {
-              showtimeId: selectedShowtime.showTime,
+              showtimeId: effectiveShowtimeId,
               seatId: firstSeat,
               seatCode: firstSeat,
               userId: hostUser.userId,
@@ -595,6 +773,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           const syncShowTime = resp.session.show_time;
           setSelectedShowtime((prev) => ({
             ...prev,
+            showtimeId: resp.session.showtime_id || prev.showtimeId,
             showTime: syncShowTime,
             showDate: resp.session.show_date || prev.showDate,
             movieTitle: resp.session.movie_title || prev.movieTitle,
@@ -769,9 +948,10 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         realtimeService.holdSeat(seatId, currentUser.userId, currentUser.name, color.key, color.hex);
 
+        const effectiveShowtimeId = sessionData?.showtime_id || selectedShowtime.showtimeId || selectedShowtime.showTime;
         try {
           await groupSessionService.holdSeat(sessionId, {
-            showtimeId: selectedShowtime.showTime,
+            showtimeId: effectiveShowtimeId,
             seatId,
             seatCode: seatId,
             userId: currentUser.userId,
@@ -811,6 +991,8 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const simIndex = memberKey === 'minh' ? 1 : memberKey === 'an' ? 2 : 3;
       const color = getMemberColor(simIndex);
 
+      const effectiveShowtimeId = sessionData?.showtime_id || selectedShowtime.showtimeId || selectedShowtime.showTime;
+
       for (const seatId of seats) {
         realtimeService.holdSeat(seatId, simUserId, targetName, color.key, color.hex);
         setHeldSeats((prev) => ({
@@ -829,7 +1011,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         if (sessionId && member) {
           try {
             await groupSessionService.holdSeat(sessionId, {
-              showtimeId: selectedShowtime.showTime,
+              showtimeId: effectiveShowtimeId,
               seatId,
               seatCode: seatId,
               userId: member.user_id,
@@ -1081,6 +1263,13 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         isHost,
         selectedShowtime,
         setSelectedShowtime,
+        selectedMovieId,
+        selectedDate,
+        selectedTheaterId,
+        selectMovie,
+        selectDate,
+        selectTheater,
+        selectShowtimeById,
         isLiveApi,
         isBackendHealthy,
         isPollingActive,

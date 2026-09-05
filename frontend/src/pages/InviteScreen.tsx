@@ -6,13 +6,18 @@ import { Header } from '../components/common/Header';
 import { RealQrCode } from '../components/common/RealQrCode';
 
 export const InviteScreen: React.FC = () => {
-  const { goTo, goBack, inviteCode, sessionData, displayMembers } = useGroupSession();
+  const { goTo, goBack, inviteCode, sessionData, displayMembers, selectedShowtime } = useGroupSession();
   const { showToast } = useToast();
 
-  const code = inviteCode || sessionData?.invite?.code || 'GTH-LIVE';
+  const code = inviteCode || sessionData?.invite?.code || 'GLX-GRP';
   // Generate real deep link URL
   const origin = window.location.origin;
   const joinUrl = `${origin}/?join=${code}`;
+
+  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Phim đã chọn';
+  const cinemaName = sessionData?.cinema_name || selectedShowtime?.cinemaName || 'Galaxy Cinema';
+  const showTime = sessionData?.show_time || selectedShowtime?.showTime || '21:00';
+  const showDate = sessionData?.show_date || selectedShowtime?.showDate || '';
 
   const handleCopyCode = async () => {
     try {
@@ -72,11 +77,11 @@ export const InviteScreen: React.FC = () => {
         <div className="movie-info-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div className="title">{sessionData?.name || 'Friday Movie Night'}</div>
+              <div className="title">{sessionData?.name || 'Đặt vé nhóm'}</div>
               <div className="meta">
-                {sessionData?.movie_title || 'Quý Tử Vượt Giàu'} • {sessionData?.show_time || '21:00'}
+                {movieTitle} • {showTime}
                 <br />
-                {sessionData?.cinema_name || 'Galaxy Cinema Nguyễn Văn Quá'}
+                {cinemaName} • {showDate}
               </div>
             </div>
             <span className="badge badge-age" style={{ fontSize: 10, whiteSpace: 'nowrap' }}>

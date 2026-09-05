@@ -77,6 +77,19 @@ router.post('/:id/cancel', async (req, res, next) => {
   }
 });
 
+// GET /api/group-sessions/showtimes/:showtimeId/occupied-seats - Get all sold/held seats for a showtime across all sessions
+router.get('/showtimes/:showtimeId/occupied-seats', async (req, res, next) => {
+  try {
+    const data = await SessionService.getShowtimeOccupiedSeats(req.params.showtimeId);
+    res.json({
+      success: true,
+      data
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/group-sessions/:id/seats - Get all active held seats for this session
 router.get('/:id/seats', async (req, res, next) => {
   try {

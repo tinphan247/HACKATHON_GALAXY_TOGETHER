@@ -3,7 +3,6 @@ import { useGroupSession } from '../context/GroupSessionContext';
 import { StatusBar } from '../components/common/StatusBar';
 import { Header } from '../components/common/Header';
 import { CountdownBanner } from '../components/common/CountdownBanner';
-import { SimulationBar } from '../components/simulation/SimulationBar';
 import { getMemberColorByKey } from '../constants/theme';
 
 export const FnBScreen: React.FC = () => {
@@ -17,9 +16,18 @@ export const FnBScreen: React.FC = () => {
     groupFnBSummary,
     sessionData,
     currentUser,
+    selectedShowtime,
   } = useGroupSession();
 
-  const seatTotal = mySeats.length * 55000;
+  const standardPrice = selectedShowtime?.ticketPriceStandard || 55000;
+  const vipPrice = selectedShowtime?.ticketPriceVip || 65000;
+  const vipRows = ['D', 'E', 'F'];
+
+  const seatTotal = mySeats.reduce((sum, s) => {
+    const row = s.charAt(0);
+    return sum + (vipRows.includes(row) ? vipPrice : standardPrice);
+  }, 0);
+
   const fnbTotal = Object.keys(comboQty).reduce(
     (sum, k) => sum + (comboQty[k] || 0) * (comboPrices[k] || 0),
     0
@@ -49,7 +57,6 @@ export const FnBScreen: React.FC = () => {
       <Header title="Bắp & Nước cá nhân" onBack={goBack} />
 
       <CountdownBanner initialSeconds={380} label="Thời gian chọn combo:" />
-      <SimulationBar />
 
       <div className="body" style={{ paddingBottom: 90 }}>
         {/* Section: Individual Combos */}

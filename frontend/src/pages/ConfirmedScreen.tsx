@@ -4,10 +4,15 @@ import { StatusBar } from '../components/common/StatusBar';
 import { Header } from '../components/common/Header';
 
 export const ConfirmedScreen: React.FC = () => {
-  const { goTo, sessionData, inviteCode, currentUser, displayMembers, heldSeats, mySeats } = useGroupSession();
+  const { goTo, sessionData, inviteCode, currentUser, displayMembers, heldSeats, mySeats, selectedShowtime } = useGroupSession();
 
-  const code = inviteCode || sessionData?.invite?.code || 'GTH-LIVE';
+  const code = inviteCode || sessionData?.invite?.code || 'GLX-GRP';
   const activeMembers = displayMembers.filter((m) => m.status !== 'EMPTY');
+
+  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Vé đã chọn';
+  const cinemaName = sessionData?.cinema_name || selectedShowtime?.cinemaName || 'Galaxy Cinema';
+  const showTime = sessionData?.show_time || selectedShowtime?.showTime || '21:00';
+  const showDate = sessionData?.show_date || selectedShowtime?.showDate || '';
 
   return (
     <div className="screen">
@@ -18,15 +23,15 @@ export const ConfirmedScreen: React.FC = () => {
         <div className="success-icon">🎉</div>
         <div className="success-title">Đặt vé nhóm thành công!</div>
         <div className="success-sub">
-          Tất cả {activeMembers.length} thành viên trong nhóm <strong>"{sessionData?.name || 'Friday Movie Night'}"</strong> đã hoàn tất đặt chỗ.
+          Tất cả {activeMembers.length} thành viên trong nhóm <strong>"{sessionData?.name || 'Galaxy Together'}"</strong> đã hoàn tất đặt chỗ.
         </div>
 
         <div className="movie-info-card" style={{ marginTop: 20 }}>
-          <div className="title">{sessionData?.movie_title || 'Quý Tử Vượt Giàu'}</div>
+          <div className="title">{movieTitle}</div>
           <div className="meta">
-            {sessionData?.cinema_name || 'Galaxy Cinema Nguyễn Văn Quá'}
+            {cinemaName}
             <br />
-            Suất: {sessionData?.show_time || '21:00'} • Thứ Hai, 07/09/2026
+            Suất: {showTime} • {showDate}
             <br />
             Mã nhóm: <strong>{code}</strong>
           </div>

@@ -103,6 +103,7 @@ export interface InvitePreviewResponseData {
   expires_at: string;
   session_id: string;
   session_name: string;
+  movie_id?: string;
   movie_title: string;
   cinema_name: string;
   show_date: string;
@@ -126,6 +127,9 @@ export interface JoinInviteResponseData {
     status: string;
     payment_mode: string;
     max_members: number;
+    showtime_id?: string;
+    cinema_id?: string;
+    movie_id?: string;
     show_time?: string;
     show_date?: string;
     movie_title?: string;

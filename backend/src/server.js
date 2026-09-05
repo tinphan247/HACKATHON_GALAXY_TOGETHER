@@ -74,12 +74,27 @@ app.use((err, req, res, next) => {
 
 import http from 'http';
 import { realtimeGateway } from './realtime/gateway.js';
+import { SessionService } from './services/session_service.js';
 
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
 
 // Mount WebSocket Realtime Gateway
 realtimeGateway.init(server);
+
+// Periodic cleanup of expired seat holds every 30 seconds
+setInterval(() => {
+  SessionService.cleanupExpiredHolds().catch((err) => {
+    console.error('Periodic seat cleanup error:', err);
+  });
+}, 30000);
+
+// Run initial cleanup immediately
+SessionService.cleanupExpiredHolds().then((count) => {
+  if (count > 0) {
+    console.log(`🧹 Initialized seat cleanup: released ${count} expired holds`);
+  }
+}).catch(console.error);
 
 const isDirectRun = process.argv[1] && (process.argv[1].endsWith('server.js') || process.argv[1].endsWith('server'));
 

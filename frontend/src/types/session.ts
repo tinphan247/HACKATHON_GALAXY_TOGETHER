@@ -41,11 +41,18 @@ export interface DisplayMember {
 export interface ShowtimeSelection {
   movieId: string;
   movieTitle: string;
+  moviePoster?: string;
+  movieAgeRating?: string;
   cinemaId: string;
   cinemaName: string;
-  showDate: string;
-  showTime: string;
+  showDate: string; // YYYY-MM-DD or display format
+  showTime: string; // e.g. "17:30"
+  showtimeId?: string;
   screenName: string;
+  screenId?: string;
+  format?: string;
+  ticketPriceStandard?: number;
+  ticketPriceVip?: number;
 }
 
 export type PaymentMode = 'split' | 'host_pays';
