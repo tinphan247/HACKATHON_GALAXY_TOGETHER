@@ -90,7 +90,7 @@ export const FnBScreen: React.FC = () => {
         expiresAt={holdExpiresAt}
       />
 
-      <div className="body" style={{ padding: '16px 0 100px 0', background: '#F5F5F5' }}>
+      <div className="body" style={{ padding: '16px 0 16px 0', background: '#F5F5F5' }}>
         {COMBOS.map((combo) => {
           const qty = comboQty[combo.id] || 0;
 
