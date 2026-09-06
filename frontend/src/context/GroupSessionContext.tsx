@@ -12,6 +12,9 @@ import type {
   PaymentSummaryResponse,
   PaymentMethod,
   MemberPaymentInfo,
+  IssuedTicket,
+  PaymentStatus,
+  GroupOrderStatus,
 } from '../types/session';
 import { groupSessionService } from '../services/groupSessionService';
 import { storageService } from '../services/storageService';
@@ -93,7 +96,7 @@ interface GroupSessionContextType {
   loadSessionFnB: () => Promise<void>;
   simulateMemberFnB: (memberName: string, comboId: string, qty: number) => Promise<void>;
 
-  // Realtime Payment State (Phase 7)
+  // Realtime Payment State (Phase 7 & Flow Host-Pays)
   payStatus: Record<string, boolean>;
   paidCount: number;
   payForUser: (userKey: string) => void;
@@ -103,6 +106,12 @@ interface GroupSessionContextType {
   payForMember: (userId: string, method?: PaymentMethod) => Promise<boolean>;
   payHostAllGroup: (method?: PaymentMethod) => Promise<boolean>;
   simulatePayment: (memberName: string, method?: PaymentMethod) => Promise<void>;
+
+  // Realtime Tickets & Payment State Machine
+  issuedTickets: IssuedTicket[];
+  paymentStatus: PaymentStatus;
+  groupOrderStatus: GroupOrderStatus;
+  loadSessionTickets: (targetId?: string) => Promise<IssuedTicket[]>;
 }
 
 const DEFAULT_SHOWTIME: ShowtimeSelection = {
@@ -384,6 +393,25 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   });
   const [paidCount, setPaidCount] = useState<number>(1);
 
+  // Realtime Tickets & Host-Pays Payment State Machine
+  const [issuedTickets, setIssuedTickets] = useState<IssuedTicket[]>([]);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('IDLE');
+  const [groupOrderStatus, setGroupOrderStatus] = useState<GroupOrderStatus>('DRAFT');
+
+  // Load session tickets from backend
+  const loadSessionTickets = useCallback(async (targetId?: string) => {
+    const id = targetId || sessionId;
+    if (!id) return [];
+    try {
+      const tickets = await groupSessionService.getSessionTickets(id);
+      setIssuedTickets(tickets);
+      return tickets;
+    } catch (e) {
+      console.warn('Failed to load session tickets:', e);
+      return [];
+    }
+  }, [sessionId]);
+
   // Check health on mount
   useEffect(() => {
     groupSessionService
@@ -413,11 +441,16 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setIsHoldTimerStarted(true);
         setHoldExpiresAt(new Date((data as unknown as { seat_hold_expires_at: string }).seat_hold_expires_at));
       }
+      if (data.status === 'CONFIRMED') {
+        loadSessionTickets(id);
+        setPaymentStatus('PAYMENT_SUCCESS');
+        setGroupOrderStatus('TICKETS_ISSUED');
+      }
       setIsBackendHealthy(true);
     } catch {
       setIsBackendHealthy(false);
     }
-  }, [sessionId]);
+  }, [sessionId, loadSessionTickets]);
 
   // Load session seats from REST API
   const loadSessionSeats = useCallback(async (targetId?: string) => {
@@ -487,11 +520,13 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const loadSessionSeatsRef = useRef(loadSessionSeats);
   const loadSessionFnBRef = useRef(loadSessionFnB);
   const loadPaymentSummaryRef = useRef(loadPaymentSummary);
+  const loadSessionTicketsRef = useRef(loadSessionTickets);
   const refreshSessionDataRef = useRef(refreshSessionData);
   useEffect(() => {
     loadSessionSeatsRef.current = loadSessionSeats;
     loadSessionFnBRef.current = loadSessionFnB;
     loadPaymentSummaryRef.current = loadPaymentSummary;
+    loadSessionTicketsRef.current = loadSessionTickets;
     refreshSessionDataRef.current = refreshSessionData;
   });
 
@@ -502,10 +537,11 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       loadSessionSeatsRef.current();
       loadSessionFnBRef.current();
       loadPaymentSummaryRef.current();
+      loadSessionTicketsRef.current();
     }
   }, [isGroupMode, sessionId]);
 
-  // Reload seats, F&B or Payment when entering respective screens (Only in active GROUP mode)
+  // Reload seats, F&B, Payment or Tickets when entering respective screens (Only in active GROUP mode)
   useEffect(() => {
     if (isGroupMode && sessionId) {
       if (currentScreen === 'screen-seats') {
@@ -514,11 +550,13 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         loadSessionFnBRef.current();
       } else if (currentScreen === 'screen-payment') {
         loadPaymentSummaryRef.current();
+      } else if (currentScreen === 'screen-ticket') {
+        loadSessionTicketsRef.current();
       }
     }
   }, [isGroupMode, sessionId, currentScreen]);
 
-  // Phase 4 & 6: Realtime WebSocket Collaboration (Connected ONLY when in active GROUP mode)
+  // Phase 4 & 6 & 7: Realtime WebSocket Collaboration (Connected ONLY when in active GROUP mode)
   const { realtimeStatus } = useSessionRealtime({
     sessionId: isGroupMode ? sessionId : null,
     userId: currentUser?.userId,
@@ -611,15 +649,37 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     onSessionConfirmed: () => {
       refreshSessionDataRef.current();
       loadPaymentSummaryRef.current();
+      loadSessionTicketsRef.current();
+      setPaymentStatus('PAYMENT_SUCCESS');
+      setGroupOrderStatus('TICKETS_ISSUED');
       showToast('🎉 Toàn bộ nhóm đã thanh toán thành công! Đang chuyển sang vé...');
       setSessionData((prev) => (prev ? { ...prev, status: 'CONFIRMED' } : prev));
-      goTo('screen-confirmed');
+      goTo('screen-ticket');
+    },
+    onGroupPaymentSuccess: () => {
+      setPaymentStatus('PAYMENT_SUCCESS');
+      setGroupOrderStatus('PAID');
+      refreshSessionDataRef.current();
+      loadPaymentSummaryRef.current();
+      showToast('🎉 Chủ nhóm đã thanh toán thành công đơn hàng!');
+    },
+    onGroupTicketsIssued: (payload) => {
+      if (payload?.tickets && Array.isArray(payload.tickets)) {
+        setIssuedTickets(payload.tickets);
+      } else {
+        loadSessionTicketsRef.current();
+      }
+      setPaymentStatus('PAYMENT_SUCCESS');
+      setGroupOrderStatus('TICKETS_ISSUED');
+      showToast('🎟️ Vé của bạn đã sẵn sàng!');
+      goTo('screen-ticket');
     },
     onReconnected: () => {
       refreshSessionDataRef.current();
       loadSessionSeatsRef.current();
       loadSessionFnBRef.current();
       loadPaymentSummaryRef.current();
+      loadSessionTicketsRef.current();
     },
   });
 
@@ -1111,7 +1171,10 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         showToast(`✓ Bạn đã thanh toán thành công qua ${method.toUpperCase()}!`);
         await loadPaymentSummaryRef.current();
         if (resp.data?.isConfirmed) {
-          goTo('screen-confirmed');
+          if (resp.data?.tickets && Array.isArray(resp.data.tickets)) {
+            setIssuedTickets(resp.data.tickets);
+          }
+          goTo('screen-ticket');
         }
         return true;
       } catch (err: unknown) {
@@ -1135,7 +1198,10 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         showToast(`✓ Đã thanh toán thành công cho bạn bè qua ${method.toUpperCase()}!`);
         await loadPaymentSummaryRef.current();
         if (resp.data?.isConfirmed) {
-          goTo('screen-confirmed');
+          if (resp.data?.tickets && Array.isArray(resp.data.tickets)) {
+            setIssuedTickets(resp.data.tickets);
+          }
+          goTo('screen-ticket');
         }
         return true;
       } catch (err: unknown) {
@@ -1150,16 +1216,26 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const payHostAllGroup = useCallback(
     async (method: PaymentMethod = 'momo'): Promise<boolean> => {
       if (!sessionId || !currentUser) return false;
+      setPaymentStatus('PAYMENT_PROCESSING');
+      setGroupOrderStatus('PAYMENT_PROCESSING');
       try {
-        await groupSessionService.payHostAll(sessionId, {
+        const resp = await groupSessionService.payHostAll(sessionId, {
           hostUserId: currentUser.userId,
           paymentMethod: method,
         });
-        showToast(`🎉 Trưởng nhóm đã thanh toán toàn bộ đơn qua ${method.toUpperCase()}!`);
+        setPaymentStatus('PAYMENT_SUCCESS');
+        setGroupOrderStatus('TICKETS_ISSUED');
+        if (resp.data?.tickets && Array.isArray(resp.data.tickets)) {
+          setIssuedTickets(resp.data.tickets);
+        } else {
+          await loadSessionTicketsRef.current();
+        }
+        showToast(`🎉 Trưởng nhóm đã thanh toán thành công toàn bộ đơn hàng!`);
         await loadPaymentSummaryRef.current();
-        goTo('screen-confirmed');
+        goTo('screen-ticket');
         return true;
       } catch (err: unknown) {
+        setPaymentStatus('PAYMENT_FAILED');
         const msg = err instanceof Error ? err.message : 'Lỗi thanh toán gộp';
         showToast(`✕ ${msg}`);
         return false;
@@ -1186,7 +1262,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         showToast(`💳 ${target.name} đã thanh toán thành công (Live API)!`);
         await loadPaymentSummaryRef.current();
         if (resp.data?.isConfirmed) {
-          goTo('screen-confirmed');
+          goTo('screen-ticket');
         }
       } catch (e) {
         console.warn('Simulation payment error:', e);
@@ -1204,6 +1280,9 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setHeldSeats({});
     setGroupFnBSummary(null);
     setPaymentSummary(null);
+    setIssuedTickets([]);
+    setPaymentStatus('IDLE');
+    setGroupOrderStatus('DRAFT');
     setShowShareModal(false);
     setIsHoldTimerStarted(false);
     setHoldExpiresAt(null);
@@ -1306,6 +1385,10 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         payForMember,
         payHostAllGroup,
         simulatePayment,
+        issuedTickets,
+        paymentStatus,
+        groupOrderStatus,
+        loadSessionTickets,
       }}
     >
       {children}
@@ -1320,3 +1403,4 @@ export const useGroupSession = (): GroupSessionContextType => {
   }
   return context;
 };
+

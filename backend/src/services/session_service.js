@@ -112,6 +112,7 @@ export class SessionService {
 
       while (!insertedInvite && attempts < 5) {
         try {
+          await client.query('SAVEPOINT invite_sp');
           const qrPayload = generateQRPayload(sessionId, inviteCode, expiresAt);
           const inviteQuery = `
             INSERT INTO invites (id, group_session_id, code, qr_payload, expires_at, created_at)
@@ -119,8 +120,10 @@ export class SessionService {
             RETURNING *;
           `;
           await client.query(inviteQuery, [inviteId, sessionId, inviteCode, qrPayload, expiresAt]);
+          await client.query('RELEASE SAVEPOINT invite_sp');
           insertedInvite = true;
         } catch (e) {
+          await client.query('ROLLBACK TO SAVEPOINT invite_sp');
           if (e.code === '23505') { // Unique constraint violation on code
             inviteCode = generateInviteCode();
             attempts++;
@@ -1147,7 +1150,7 @@ export class SessionService {
       );
       const unpaidCount = parseInt(unpaidCountRes.rows[0].count, 10);
       const isAllPaid = unpaidCount === 0;
-
+      let tickets = [];
       if (isAllPaid) {
         // Confirm entire session
         await client.query(
@@ -1172,6 +1175,8 @@ export class SessionService {
            ON CONFLICT (group_session_id) DO UPDATE SET total_amount = $3, status = 'confirmed'`,
           [bookingId, sessionId, bookingTotal]
         );
+        // 9. Issue tickets for all members
+        tickets = await this.issueTicketsForSession(client, sessionId, bookingId);
       }
 
       await client.query('COMMIT');
@@ -1192,6 +1197,7 @@ export class SessionService {
         memberName: member.name,
         userId,
         payerUserId: payerUserId || userId,
+        tickets: tickets || [],
         isAllPaid: summary.isAllPaid,
         isConfirmed: summary.isConfirmed,
         summary,
@@ -1290,12 +1296,16 @@ export class SessionService {
         [bookingId, sessionId, totalAmount]
       );
 
+      // 9. Issue individual tickets for all members
+      const tickets = await this.issueTicketsForSession(client, sessionId, bookingId);
+
       await client.query('COMMIT');
 
       const summary = await this.calculateSessionPaymentSummary(sessionId);
 
       return {
         success: true,
+        bookingId,
         payment: {
           id: paymentId,
           amount: totalAmount,
@@ -1303,6 +1313,7 @@ export class SessionService {
           gatewayRef,
           paidAt: new Date().toISOString(),
         },
+        tickets,
         isAllPaid: true,
         isConfirmed: true,
         summary,
@@ -1314,4 +1325,81 @@ export class SessionService {
       client.release();
     }
   }
+
+  /**
+   * Helper to issue individual tickets in database for all sold seats in session
+   */
+  static async issueTicketsForSession(client, sessionId, bookingId) {
+    const seatsRes = await client.query(
+      `SELECT sh.id as seat_hold_id, sh.group_member_id, sh.seat_id, sh.seat_code, sh.seat_type, sh.price,
+              gm.user_id, gm.name as member_name, gm.color_slot
+       FROM seat_holds sh
+       JOIN group_members gm ON sh.group_member_id = gm.id
+       WHERE sh.group_session_id = $1 AND sh.status = 'sold'`,
+      [sessionId]
+    );
+
+    const issuedTickets = [];
+
+    for (const row of seatsRes.rows) {
+      const bookingItemId = crypto.randomUUID();
+      await client.query(
+        `INSERT INTO booking_items (id, group_booking_id, group_member_id, seat_id, seat_code, price)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO NOTHING`,
+        [bookingItemId, bookingId, row.group_member_id, row.seat_id, row.seat_code, row.price]
+      );
+
+      const ticketId = crypto.randomUUID();
+      const randomNum = Math.floor(100000 + Math.random() * 900000);
+      const ticketCode = `GLX-${randomNum}`;
+      const qrPayload = `GLX-TICKET:${sessionId}:${(row.member_name || 'MEMBER').toUpperCase()}:${row.seat_code}:${ticketCode}`;
+
+      const tRes = await client.query(
+        `INSERT INTO tickets (id, booking_item_id, group_member_id, ticket_code, qr_payload, status)
+         VALUES ($1, $2, $3, $4, $5, 'valid')
+         ON CONFLICT (booking_item_id) DO UPDATE SET ticket_code = tickets.ticket_code
+         RETURNING id, ticket_code, qr_payload, status, created_at`,
+        [ticketId, bookingItemId, row.group_member_id, ticketCode, qrPayload]
+      );
+
+      const tRow = tRes.rows[0];
+      issuedTickets.push({
+        id: tRow.id,
+        ticketCode: tRow.ticket_code,
+        qrPayload: tRow.qr_payload,
+        memberId: row.group_member_id,
+        userId: row.user_id,
+        memberName: row.member_name,
+        colorSlot: row.color_slot,
+        seatId: row.seat_id,
+        seatCode: row.seat_code,
+        seatType: row.seat_type,
+        price: Number(row.price),
+        status: tRow.status,
+        createdAt: tRow.created_at,
+      });
+    }
+
+    return issuedTickets;
+  }
+
+  /**
+   * Get all issued tickets for a session
+   */
+  static async getSessionTickets(sessionId) {
+    const res = await pool.query(
+      `SELECT t.id, t.ticket_code as "ticketCode", t.qr_payload as "qrPayload", t.status, t.created_at as "createdAt",
+              bi.seat_id as "seatId", bi.seat_code as "seatCode", bi.price,
+              gm.id as "memberId", gm.user_id as "userId", gm.name as "memberName", gm.color_slot as "colorSlot", gm.role
+       FROM tickets t
+       JOIN booking_items bi ON t.booking_item_id = bi.id
+       JOIN group_members gm ON t.group_member_id = gm.id
+       WHERE gm.group_session_id = $1
+       ORDER BY gm.color_slot ASC, bi.seat_code ASC`,
+      [sessionId]
+    );
+    return res.rows;
+  }
 }
+

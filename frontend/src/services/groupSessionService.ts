@@ -216,6 +216,16 @@ export const groupSessionService = {
       body: JSON.stringify({ durationMinutes }),
     });
   },
+
+  /**
+   * Get all issued tickets for a session
+   */
+  async getSessionTickets(sessionId: string) {
+    return apiClient<any[]>(`/api/group-sessions/${sessionId}/tickets`, {
+      method: 'GET',
+    });
+  },
 };
+
 
 

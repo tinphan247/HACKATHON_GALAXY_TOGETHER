@@ -61,6 +61,8 @@ export const FnBScreen: React.FC = () => {
     currentUser,
     selectedShowtime,
     holdExpiresAt,
+    isGroupMode,
+    sessionData,
   } = useGroupSession();
 
   const standardPrice = selectedShowtime?.ticketPriceStandard || 55000;
@@ -79,6 +81,19 @@ export const FnBScreen: React.FC = () => {
 
   const total = seatTotal + fnbTotal;
   const formatMoney = (n: number) => n.toLocaleString('vi-VN') + 'đ';
+
+  const isHostPays =
+    isGroupMode &&
+    ((sessionData?.payment_mode as string) === 'host_pays' ||
+      sessionData?.payment_mode === 'HOST_PAYS_ALL');
+
+  const handleNext = () => {
+    if (isHostPays) {
+      goTo('screen-confirmed');
+    } else {
+      goTo('screen-payment');
+    }
+  };
 
   return (
     <div className="screen" style={{ background: '#F5F5F5' }}>
@@ -182,9 +197,9 @@ export const FnBScreen: React.FC = () => {
         <button
           type="button"
           className="fnb-bottom-cta"
-          onClick={() => goTo('screen-payment')}
+          onClick={handleNext}
         >
-          Tiếp tục
+          {isHostPays ? 'Xác nhận' : 'Tiếp tục'}
         </button>
       </div>
     </div>

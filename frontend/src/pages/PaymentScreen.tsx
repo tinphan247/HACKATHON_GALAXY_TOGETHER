@@ -1,570 +1,924 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useGroupSession } from '../context/GroupSessionContext';
+import { useToast } from '../context/ToastContext';
 import { StatusBar } from '../components/common/StatusBar';
-import { Header } from '../components/common/Header';
 import { CountdownBanner } from '../components/common/CountdownBanner';
-import { getMemberColorByKey } from '../constants/theme';
 import type { PaymentMethod } from '../types/session';
 
-interface PayModalTarget {
-  type: 'self' | 'member' | 'host_all';
-  userId?: string;
-  memberName: string;
-  amount: number;
+interface PaymentMethodOption {
+  id: PaymentMethod;
+  name: string;
+  desc: string;
+  iconBg: string;
+  iconText: string;
 }
+
+const COMBO_NAMES: Record<string, string> = {
+  c1: 'Combo 1 Big Extra',
+  c2: 'Combo 2 Big Extra',
+  c3: 'Combo 3',
+  c4: 'Combo 4',
+  c5: 'Combo 2 Big',
+};
+
+const PAYMENT_OPTIONS: PaymentMethodOption[] = [
+  {
+    id: 'card',
+    name: 'OnePay - Visa, Master, JCB,... / ATM / QR Ngân hàng / Apple Pay',
+    desc: 'Thẻ thanh toán quốc tế & thẻ ghi nợ nội địa',
+    iconBg: '#006699',
+    iconText: 'OnePay',
+  },
+  {
+    id: 'zalopay',
+    name: 'Ví ShopeePay - Giảm đến 20% tối đa 50K',
+    desc: 'Ưu đãi liên kết ví ShopeePay',
+    iconBg: '#EE4D2D',
+    iconText: 'Shopee',
+  },
+  {
+    id: 'zalopay',
+    name: 'Zalopay - Nhập mã GIAM8K ưu đãi bạn mới',
+    desc: 'Mở app Zalopay hoặc Zalo quét mã tức thì',
+    iconBg: '#0088FF',
+    iconText: 'Zalo',
+  },
+  {
+    id: 'card',
+    name: 'HSBC/Payoo - ATM/VISA/MASTER/JCB/QRCODE - Ưu đãi 30% khi thanh toán bằng thẻ JCB',
+    desc: 'Cổng thanh toán Payoo liên kết thẻ tín dụng',
+    iconBg: '#003366',
+    iconText: 'Payoo',
+  },
+  {
+    id: 'momo',
+    name: 'Ví MoMo - Thanh toán nhanh chóng tiện lợi',
+    desc: 'Xác nhận 1 chạm trên ứng dụng MoMo',
+    iconBg: '#A50064',
+    iconText: 'MoMo',
+  },
+];
 
 export const PaymentScreen: React.FC = () => {
   const {
     goTo,
     goBack,
     currentUser,
+    isGroupMode,
+    sessionData,
     displayMembers,
     heldSeats,
     mySeats,
     comboQty,
     comboPrices,
     groupFnBSummary,
-    paymentSummary,
-    payMyShare,
-    payForMember,
-    payHostAllGroup,
-    sessionData,
     selectedShowtime,
+    holdExpiresAt,
+    payHostAllGroup,
+    payMyShare,
+    paymentSummary,
+    loadPaymentSummary,
+    paymentStatus,
   } = useGroupSession();
 
-  const [modalTarget, setModalTarget] = useState<PayModalTarget | null>(null);
-  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('momo');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { showToast } = useToast();
 
-  // Active members
+  const isHostPays =
+    isGroupMode &&
+    ((sessionData?.payment_mode as string) === 'host_pays' ||
+      sessionData?.payment_mode === 'HOST_PAYS_ALL');
+
+  const isSplitMode = isGroupMode && !isHostPays;
+  const isHost = currentUser?.isHost ?? true;
+
+  // Role Guard: In HOST_PAYS mode, only Host pays, Member is redirected back to ConfirmedScreen
+  useEffect(() => {
+    if (isGroupMode && isHostPays && !isHost) {
+      goTo('screen-confirmed');
+    }
+  }, [isGroupMode, isHostPays, isHost, goTo]);
+
+  // In Split-Pay mode, keep payment summary fresh
+  useEffect(() => {
+    if (isSplitMode) {
+      loadPaymentSummary();
+    }
+  }, [isSplitMode, loadPaymentSummary]);
+
+  const [selectedMethodIndex, setSelectedMethodIndex] = useState<number>(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isStarsApplied, setIsStarsApplied] = useState(false);
+
   const activeMembers = displayMembers.filter((m) => m.status !== 'EMPTY');
   const totalMembersCount = Math.max(1, activeMembers.length);
 
-  // Payment mode check
-  const isHostPays =
-    (sessionData?.payment_mode as string) === 'host_pays' ||
-    (sessionData?.payment_mode as string) === 'HOST_PAYS_ALL';
+  // Dynamic movie & cinema information
+  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Hope Vùng Tử Địa';
+  const moviePoster = selectedShowtime?.moviePoster || '/posters/poster_quytuvuotgiau.jpg';
+  const cinemaName = sessionData?.cinema_name || selectedShowtime?.cinemaName || 'Galaxy Cinema Nguyễn Văn Quá';
+  const screenName = sessionData?.screen_name || selectedShowtime?.screenName || 'RAP 4';
+  const showTime = sessionData?.show_time || selectedShowtime?.showTime || '20:15';
+  const showDate = sessionData?.show_date || selectedShowtime?.showDate || '06/09/2026';
+  const formatText = selectedShowtime?.format || '2D PHỤ ĐỀ';
+  const ageRating = selectedShowtime?.movieAgeRating || 'T16';
 
-  const isHost = currentUser?.isHost ?? true;
-
-  // Dynamic ticket price by seat type
   const standardPrice = selectedShowtime?.ticketPriceStandard || 55000;
   const vipPrice = selectedShowtime?.ticketPriceVip || 65000;
   const vipRows = ['D', 'E', 'F'];
 
-  // Local fallback calculations if summary is still loading
-  const fnbTotal = Object.keys(comboQty).reduce(
-    (sum, k) => sum + (comboQty[k] || 0) * (comboPrices[k] || 0),
-    0
-  );
-  const mySeatTotal = mySeats.reduce((sum, s) => {
-    const row = s.charAt(0);
-    return sum + (vipRows.includes(row) ? vipPrice : standardPrice);
-  }, 0);
-  const myLocalTotal = mySeatTotal + fnbTotal;
-
   const formatMoney = (n: number) => n.toLocaleString('vi-VN') + 'đ';
 
-  const paymentMethods: Array<{
-    id: PaymentMethod;
-    name: string;
-    icon: string;
-    desc: string;
-    badge?: string;
-  }> = [
-    {
-      id: 'momo',
-      name: 'Ví MoMo',
-      icon: '🟣',
-      desc: 'Thanh toán tức thì qua ứng dụng MoMo',
-      badge: 'Khuyên dùng',
-    },
-    {
-      id: 'zalopay',
-      name: 'Ví ZaloPay',
-      icon: '🔵',
-      desc: 'Mở nhanh trong Zalo hoặc app ZaloPay',
-    },
-    {
-      id: 'vnpay',
-      name: 'VNPAY-QR / VietQR',
-      icon: '🔴',
-      desc: 'Hỗ trợ quét mã QR từ hơn 40 ứng dụng ngân hàng',
-    },
-    {
-      id: 'card',
-      name: 'Thẻ Quốc tế / ATM',
-      icon: '💳',
-      desc: 'Visa, MasterCard, JCB, Thẻ ATM nội địa',
-    },
-  ];
-
-  // Handle open modal
-  const handleOpenPayModal = (target: PayModalTarget) => {
-    setModalTarget(target);
+  // Format Show Date with Day of Week
+  const formatShowDateTime = (dateStr?: string, timeStr?: string) => {
+    const time = timeStr || '20:15';
+    if (!dateStr) return `${time} - Chủ Nhật, 06/09/2026`;
+    try {
+      let d: Date;
+      if (dateStr.includes('/')) {
+        const [day, month, year] = dateStr.split('/');
+        d = new Date(Number(year), Number(month) - 1, Number(day));
+      } else {
+        d = new Date(dateStr);
+      }
+      const daysOfWeek = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+      const dayName = daysOfWeek[d.getDay()] || 'Chủ Nhật';
+      const dayFormatted = d.getDate().toString().padStart(2, '0');
+      const monthFormatted = (d.getMonth() + 1).toString().padStart(2, '0');
+      const yearFormatted = d.getFullYear();
+      return `${time} - ${dayName}, ${dayFormatted}/${monthFormatted}/${yearFormatted}`;
+    } catch {
+      return `${time} - ${dateStr}`;
+    }
   };
 
-  // Handle confirm pay
-  const handleConfirmPay = async () => {
-    if (!modalTarget || isSubmitting) return;
+  // Payment status of current user in Split Mode
+  const myPaymentInfo = useMemo(() => {
+    if (!paymentSummary || !currentUser) return null;
+    return paymentSummary.members?.find(
+      (m) =>
+        m.userId === currentUser.userId ||
+        (currentUser.name && m.memberName?.toLowerCase() === currentUser.name.toLowerCase())
+    );
+  }, [paymentSummary, currentUser]);
+
+  const hasPaidMyShare = myPaymentInfo?.isPaid ?? false;
+  const paidCount = paymentSummary?.paidMembersCount ?? 0;
+  const isAllPaid = paymentSummary?.isAllPaid ?? false;
+
+  // ---------------------------------------------------------
+  // 1. Current user's individual order items (Seats + Combos)
+  // ---------------------------------------------------------
+  const mySeatsHeld = useMemo(() => {
+    return Object.values(heldSeats).filter(
+      (s) =>
+        s.userId === currentUser?.userId ||
+        (currentUser?.name && s.memberName?.toLowerCase() === currentUser.name.toLowerCase())
+    );
+  }, [heldSeats, currentUser]);
+
+  const mySeatCodes = useMemo(() => {
+    if (mySeats.length > 0) return mySeats;
+    const codes = mySeatsHeld.map((s) => s.seatCode || s.seatId);
+    if (codes.length > 0) return codes;
+    if (myPaymentInfo && myPaymentInfo.seats?.length) {
+      return myPaymentInfo.seats.map((s) => s.seatCode || s.seatId);
+    }
+    return [];
+  }, [mySeats, mySeatsHeld, myPaymentInfo]);
+
+  const mySeatItems = useMemo(() => {
+    return mySeatCodes.map((code) => {
+      const row = code.charAt(0);
+      const isVip = vipRows.includes(row);
+      const price = isVip ? vipPrice : standardPrice;
+      return {
+        seatCode: code,
+        seatType: isVip ? 'VIP' : 'Standard',
+        price,
+      };
+    });
+  }, [mySeatCodes, vipRows, vipPrice, standardPrice]);
+
+  const myFnbItems = useMemo(() => {
+    const local = Object.entries(comboQty)
+      .filter(([_, q]) => q > 0)
+      .map(([id, q]) => ({
+        id,
+        name: COMBO_NAMES[id] || `Combo ${id.toUpperCase()}`,
+        quantity: q,
+        unitPrice: comboPrices[id] || 100000,
+        subtotal: q * (comboPrices[id] || 100000),
+      }));
+    if (local.length > 0) return local;
+
+    if (myPaymentInfo && myPaymentInfo.fnbItems?.length) {
+      return myPaymentInfo.fnbItems
+        .filter((it) => it.quantity > 0)
+        .map((it) => ({
+          id: it.comboId,
+          name: it.comboName || COMBO_NAMES[it.comboId] || `Combo ${it.comboId}`,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice || 100000,
+          subtotal: (it.unitPrice || 100000) * it.quantity,
+        }));
+    }
+    return [];
+  }, [comboQty, comboPrices, myPaymentInfo]);
+
+  const mySeatTotal = useMemo(() => mySeatItems.reduce((s, it) => s + it.price, 0), [mySeatItems]);
+  const myFnbTotal = useMemo(() => myFnbItems.reduce((s, it) => s + it.subtotal, 0), [myFnbItems]);
+  const mySubtotal = useMemo(() => {
+    const sum = mySeatTotal + myFnbTotal;
+    if (sum > 0) return sum;
+    return myPaymentInfo?.totalAmount || 0;
+  }, [mySeatTotal, myFnbTotal, myPaymentInfo]);
+
+  // ---------------------------------------------------------
+  // 2. All members' order items (Used ONLY by Host in HOST_PAYS)
+  // ---------------------------------------------------------
+  const memberOrderDetails = useMemo(() => {
+    if (!isHostPays || !isHost) return [];
+
+    return activeMembers.map((m) => {
+      const isMe = m.userId === currentUser?.userId;
+
+      // Seats
+      const memberSeatsHeld = Object.values(heldSeats).filter(
+        (s) =>
+          s.userId === m.userId ||
+          (m.name && s.memberName?.toLowerCase() === m.name.toLowerCase())
+      );
+
+      const seatCodes = isMe
+        ? mySeatCodes.length > 0
+          ? mySeatCodes
+          : memberSeatsHeld.map((s) => s.seatCode || s.seatId)
+        : memberSeatsHeld.map((s) => s.seatCode || s.seatId);
+
+      const seatItems = seatCodes.map((code) => {
+        const row = code.charAt(0);
+        const isVip = vipRows.includes(row);
+        const price = isVip ? vipPrice : standardPrice;
+        return {
+          seatCode: code,
+          seatType: isVip ? 'VIP' : 'Standard',
+          price,
+        };
+      });
+
+      // F&B
+      let fnbItems: Array<{ id: string; name: string; quantity: number; unitPrice: number; subtotal: number }> = [];
+
+      if (isMe) {
+        fnbItems = myFnbItems;
+      } else {
+        const memberFnb = groupFnBSummary?.members?.find(
+          (f) =>
+            f.userId === m.userId ||
+            (m.name && f.memberName?.toLowerCase() === m.name.toLowerCase())
+        );
+        if (memberFnb && memberFnb.items) {
+          fnbItems = memberFnb.items
+            .filter((it) => it.quantity > 0)
+            .map((it) => ({
+              id: it.comboId,
+              name: it.comboName || COMBO_NAMES[it.comboId] || `Combo ${it.comboId}`,
+              quantity: it.quantity,
+              unitPrice: it.unitPrice || 100000,
+              subtotal: (it.unitPrice || 100000) * it.quantity,
+            }));
+        }
+      }
+
+      const memberSeatTotal = seatItems.reduce((s, it) => s + it.price, 0);
+      const memberFnbTotal = fnbItems.reduce((s, it) => s + it.subtotal, 0);
+
+      return {
+        member: m,
+        isMe,
+        seatItems,
+        fnbItems,
+        subtotal: memberSeatTotal + memberFnbTotal,
+      };
+    });
+  }, [
+    isHostPays,
+    isHost,
+    activeMembers,
+    currentUser,
+    heldSeats,
+    mySeatCodes,
+    vipRows,
+    vipPrice,
+    standardPrice,
+    myFnbItems,
+    groupFnBSummary,
+  ]);
+
+  const groupTotalAmount = useMemo(() => {
+    return memberOrderDetails.reduce((sum, it) => sum + it.subtotal, 0);
+  }, [memberOrderDetails]);
+
+  // ---------------------------------------------------------
+  // 3. Final Total Calculation
+  // - In HOST_PAYS mode for Host: Group total of all members
+  // - In SPLIT_EQUAL or SOLO mode: STRICTLY individual order subtotal!
+  // ---------------------------------------------------------
+  const rawTotalAmount = useMemo(() => {
+    if (isGroupMode && isHostPays && isHost) {
+      return groupTotalAmount;
+    }
+    return mySubtotal;
+  }, [isGroupMode, isHostPays, isHost, groupTotalAmount, mySubtotal]);
+
+  const discountAmount = isStarsApplied ? 1000 : 0;
+  const finalTotalAmount = Math.max(0, rawTotalAmount - discountAmount);
+
+  // ---------------------------------------------------------
+  // 4. Payment Trigger Handlers
+  // ---------------------------------------------------------
+  const handlePayment = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      if (modalTarget.type === 'self') {
-        await payMyShare(selectedMethod);
-      } else if (modalTarget.type === 'member' && modalTarget.userId) {
-        await payForMember(modalTarget.userId, selectedMethod);
-      } else if (modalTarget.type === 'host_all') {
+      const selectedMethod = (PAYMENT_OPTIONS[selectedMethodIndex]?.id || 'momo') as PaymentMethod;
+
+      if (isGroupMode && isHostPays && isHost) {
+        // Host pays for all members
         await payHostAllGroup(selectedMethod);
+      } else if (isSplitMode) {
+        // Member or Host pays their own share
+        const success = await payMyShare(selectedMethod);
+        if (success) {
+          await loadPaymentSummary();
+        }
+      } else {
+        // Solo payment
+        showToast('✓ Đặt vé cá nhân thành công!');
+        goTo('screen-ticket');
       }
-      setModalTarget(null);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Paid count & all paid status from server-authoritative summary or local
-  const paidCount = paymentSummary?.paidMembersCount ?? 0;
-  const isAllPaid = paymentSummary?.isAllPaid ?? false;
-  const totalSessionAmount = paymentSummary?.totalSessionAmount ?? myLocalTotal;
-  const pct = Math.min(100, Math.round((paidCount / totalMembersCount) * 100));
-
   return (
-    <div className="screen">
+    <div className="screen" style={{ background: '#F4F5F7' }}>
       <StatusBar />
-      <Header
-        title={isHostPays ? 'Thanh toán gộp (Host-Pays)' : 'Thanh toán nhóm (Split-Pay)'}
-        onBack={goBack}
-      />
 
-      <CountdownBanner initialSeconds={300} label="Thời gian thanh toán còn lại:" />
+      {/* Galaxy Cinema Header */}
+      <div
+        style={{
+          background: '#FFFFFF',
+          borderBottom: '1px solid #E5E7EB',
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          position: 'sticky',
+          top: 0,
+          zIndex: 40,
+        }}
+      >
+        <button
+          type="button"
+          onClick={goBack}
+          style={{
+            background: 'none',
+            border: 'none',
+            fontSize: 20,
+            cursor: 'pointer',
+            padding: 4,
+            display: 'flex',
+            alignItems: 'center',
+            color: '#111827',
+          }}
+          aria-label="Quay lại"
+        >
+          ‹
+        </button>
 
-      <div className="body" style={{ paddingBottom: 90 }}>
-        {/* Payment Mode Indicator */}
-        <div style={{ padding: '12px 16px 4px' }}>
-          <div
-            style={{
-              background: isHostPays ? '#EFF6FF' : '#FFF7ED',
-              border: isHostPays ? '1px solid #BFDBFE' : '1px solid #FFEDD5',
-              borderRadius: 10,
-              padding: '10px 14px',
-              fontSize: 12,
-              lineHeight: 1.4,
-              color: isHostPays ? '#1E40AF' : '#9A3412',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <div>
-              <strong>{isHostPays ? '👑 Chế độ: Trưởng nhóm trả toàn bộ' : '🤝 Chế độ: Mỗi người tự trả phần mình'}</strong>
-              <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2 }}>
-                {isHostPays
-                  ? 'Trưởng nhóm thực hiện 1 giao dịch duy nhất cho cả phòng'
-                  : 'Tiền vé và combo được tính độc lập cho từng bạn bè'}
-              </div>
-            </div>
-            <span style={{ fontSize: 18 }}>{isHostPays ? '💳' : '⚡'}</span>
-          </div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>
+          {isGroupMode && isHostPays ? 'Giao dịch (Chủ nhóm)' : 'Giao dịch'}
         </div>
 
-        {/* Progress Card (Split-Pay Mode) */}
-        {!isHostPays && (
-          <div style={{ padding: '10px 16px 6px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                Tiến độ thanh toán nhóm:
-              </span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: isAllPaid ? '#16A34A' : 'var(--orange)' }}>
-                {paidCount}/{totalMembersCount} bạn đã trả {isAllPaid ? '✓ Xong' : `(${pct}%)`}
-              </span>
-            </div>
-            <div
-              style={{
-                height: 8,
-                background: 'var(--surface)',
-                borderRadius: 4,
-                overflow: 'hidden',
-                border: '1px solid var(--border)',
-              }}
-            >
-              <div
-                style={{
-                  height: '100%',
-                  width: `${pct}%`,
-                  background: isAllPaid ? '#16A34A' : 'var(--orange)',
-                  transition: 'width 0.4s ease',
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Breakdown Heading */}
-        <div className="section-heading" style={{ marginTop: 12 }}>
-          {isHostPays ? 'Chi tiết đơn thanh toán gộp' : 'Chi tiết từng thành viên (Vé + F&B)'}
-        </div>
-
-        {/* Members Breakdown List */}
-        <div style={{ padding: '0 16px' }}>
-          {activeMembers.map((m, idx) => {
-            const isMe = m.userId === currentUser?.userId;
-            const color = getMemberColorByKey(m.colorKey);
-
-            // Read from paymentSummary if available, else fallback
-            const memberPayInfo = paymentSummary?.members?.find(
-              (p) => p.userId === m.userId || (m.name && p.memberName.toLowerCase() === m.name.toLowerCase())
-            );
-
-            // Compute held seats
-            const memberHeld = Object.values(heldSeats)
-              .filter((s) => s.userId === m.userId || (m.name && s.memberName?.toLowerCase() === m.name.toLowerCase()))
-              .map((s) => s.seatCode || s.seatId);
-
-            const seatLabel = memberPayInfo?.seats?.length
-              ? memberPayInfo.seats.map((s) => s.seatCode).join(', ')
-              : memberHeld.length > 0
-              ? memberHeld.join(', ')
-              : isMe && mySeats.length > 0
-              ? mySeats.join(', ')
-              : 'Ghế đơn';
-
-            const memberFnb = groupFnBSummary?.members?.find(
-              (f) => f.userId === m.userId || (m.name && f.memberName.toLowerCase() === m.name.toLowerCase())
-            );
-            const memberFnbAmount = memberPayInfo ? memberPayInfo.fnbAmount : isMe ? fnbTotal : (memberFnb?.totalAmount || 0);
-
-            const memberTotalAmount = memberPayInfo
-              ? memberPayInfo.totalAmount
-              : (memberHeld.length > 0 ? memberHeld.length * 55000 : 55000) + memberFnbAmount;
-
-            const isPaid = memberPayInfo?.isPaid || (isAllPaid && isMe);
-
-            return (
-              <div
-                key={m.userId || idx}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  background: 'var(--white)',
-                  border: isPaid ? '1.5px solid #BBF7D0' : '1px solid var(--border)',
-                  borderRadius: 12,
-                  padding: 12,
-                  marginBottom: 10,
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                }}
-              >
-                {/* Dot / Status */}
-                <div
-                  style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: '50%',
-                    background: isPaid ? '#16A34A' : color.hex,
-                    flexShrink: 0,
-                    boxShadow: isPaid ? '0 0 0 3px rgba(22,163,74,0.2)' : 'none',
-                  }}
-                />
-
-                {/* Member Info */}
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {m.name} {isMe ? '(Bạn)' : ''}
-                    {m.isHost && (
-                      <span style={{ fontSize: 10, color: 'var(--orange)', marginLeft: 6, fontWeight: 600 }}>
-                        ★ Host
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    Ghế: {seatLabel} {memberFnbAmount > 0 ? `+ F&B (${formatMoney(memberFnbAmount)})` : ''}
-                  </div>
-                </div>
-
-                {/* Amount */}
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {formatMoney(memberTotalAmount)}
-                  </div>
-                  {isPaid ? (
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: '#16A34A',
-                        background: '#DCFCE7',
-                        padding: '2px 6px',
-                        borderRadius: 8,
-                        display: 'inline-block',
-                        marginTop: 3,
-                      }}
-                    >
-                      ✓ Đã thanh toán
-                    </span>
-                  ) : isHostPays ? (
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Chờ Host trả</span>
-                  ) : isMe ? (
-                    <button
-                      className="cta-primary"
-                      style={{
-                        padding: '5px 12px',
-                        fontSize: 11,
-                        borderRadius: 14,
-                        marginTop: 3,
-                        background: 'var(--orange)',
-                      }}
-                      onClick={() =>
-                        handleOpenPayModal({
-                          type: 'self',
-                          memberName: m.name || 'Bạn',
-                          amount: memberTotalAmount,
-                        })
-                      }
-                    >
-                      Trả tiền →
-                    </button>
-                  ) : isHost ? (
-                    <button
-                      style={{
-                        padding: '4px 10px',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        borderRadius: 14,
-                        marginTop: 3,
-                        background: '#EFF6FF',
-                        border: '1px solid #BFDBFE',
-                        color: '#1D4ED8',
-                        cursor: 'pointer',
-                      }}
-                      onClick={() =>
-                        handleOpenPayModal({
-                          type: 'member',
-                          userId: m.userId,
-                          memberName: m.name || 'Thành viên',
-                          amount: memberTotalAmount,
-                        })
-                      }
-                    >
-                      Trả hộ bạn
-                    </button>
-                  ) : (
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Đang trả...</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Host Pays All Action Card */}
-        {isHostPays && (
-          <div style={{ padding: '0 16px 16px' }}>
-            <div
-              className="card"
-              style={{
-                margin: 0,
-                padding: 16,
-                background: 'var(--white)',
-                border: '2px solid var(--orange)',
-                borderRadius: 14,
-                textAlign: 'center',
-              }}
-            >
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Tổng thanh toán toàn bộ nhóm:</div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--navy)', margin: '6px 0 14px' }}>
-                {formatMoney(totalSessionAmount)}
-              </div>
-              {isHost ? (
-                <button
-                  className="cta-primary"
-                  style={{ width: '100%', padding: '12px', fontSize: 14 }}
-                  onClick={() =>
-                    handleOpenPayModal({
-                      type: 'host_all',
-                      memberName: 'Cả nhóm',
-                      amount: totalSessionAmount,
-                    })
-                  }
-                >
-                  💳 Trưởng nhóm thanh toán ngay ({formatMoney(totalSessionAmount)})
-                </button>
-              ) : (
-                <div style={{ fontSize: 12, color: 'var(--orange)', fontWeight: 600 }}>
-                  ⏳ Vui lòng chờ Trưởng nhóm hoàn tất giao dịch...
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <div style={{ width: 24 }} />
       </div>
 
-      {/* Payment Method Selection Modal */}
-      {modalTarget && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'flex-end',
-            zIndex: 9999,
-          }}
-          onClick={() => !isSubmitting && setModalTarget(null)}
-        >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: 430,
-              margin: '0 auto',
-              background: 'var(--white)',
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              padding: '20px 16px 24px',
-              boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--navy)' }}>
-                Chọn phương thức thanh toán
-              </div>
-              <button
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  fontSize: 20,
-                  cursor: 'pointer',
-                  color: 'var(--text-muted)',
-                }}
-                onClick={() => setModalTarget(null)}
-              >
-                ✕
-              </button>
-            </div>
+      <CountdownBanner
+        initialSeconds={300}
+        label="Thời gian hoàn tất thanh toán:"
+        expiresAt={holdExpiresAt}
+      />
 
-            {/* Target & Amount Card */}
+      <div className="body" style={{ paddingBottom: 110 }}>
+        {/* Split Mode Progress Banner */}
+        {isSplitMode && (
+          <div style={{ margin: '10px 16px 2px' }}>
             <div
               style={{
-                background: 'var(--surface)',
+                background: hasPaidMyShare ? '#ECFDF5' : '#FFF7ED',
+                border: hasPaidMyShare ? '1px solid #A7F3D0' : '1px solid #FFEDD5',
                 borderRadius: 12,
                 padding: '12px 14px',
-                marginBottom: 16,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
               }}
             >
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {modalTarget.type === 'host_all'
-                    ? 'Thanh toán trọn gói cả nhóm:'
-                    : modalTarget.type === 'member'
-                    ? `Thanh toán trả hộ ${modalTarget.memberName}:`
-                    : 'Thanh toán phần của bạn:'}
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {modalTarget.memberName}
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: hasPaidMyShare ? '#065F46' : '#9A3412' }}>
+                  {hasPaidMyShare ? '✓ Bạn đã thanh toán phần của mình' : '🤝 Chế độ: Mỗi người tự thanh toán phần mình'}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: isAllPaid ? '#16A34A' : '#F97316' }}>
+                  {paidCount}/{totalMembersCount} bạn đã trả {isAllPaid ? '(Hoàn tất)' : ''}
+                </span>
               </div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--orange)' }}>
-                {formatMoney(modalTarget.amount)}
+              <div style={{ fontSize: 11.5, color: hasPaidMyShare ? '#047857' : '#7C2D12', lineHeight: 1.4 }}>
+                {hasPaidMyShare
+                  ? isAllPaid
+                    ? 'Toàn bộ nhóm đã thanh toán hoàn tất! Bạn có thể xem vé QR ngay.'
+                    : `Hệ thống đang chờ ${Math.max(0, totalMembersCount - paidCount)} bạn bè còn lại thanh toán. Khi cả nhóm hoàn tất, vé điện tử QR sẽ tự động hiển thị.`
+                  : 'Tiền vé ghế và combo bên dưới chỉ bao gồm phần của bạn. Bạn tự thanh toán độc lập không bị tính trùng đơn người khác.'}
               </div>
             </div>
+          </div>
+        )}
 
-            {/* Method Choices */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-              {paymentMethods.map((m) => {
-                const isSelected = selectedMethod === m.id;
+        {/* Movie Ticket Card with Ticket Notches */}
+        <div
+          style={{
+            margin: '12px 16px 8px',
+            background: '#FFFFFF',
+            borderRadius: 14,
+            padding: '14px',
+            position: 'relative',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+            display: 'flex',
+            gap: 12,
+            alignItems: 'center',
+          }}
+        >
+          {/* Left Notch */}
+          <div
+            style={{
+              position: 'absolute',
+              left: -8,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 16,
+              height: 16,
+              background: '#F4F5F7',
+              borderRadius: '50%',
+            }}
+          />
+
+          {/* Right Notch */}
+          <div
+            style={{
+              position: 'absolute',
+              right: -8,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 16,
+              height: 16,
+              background: '#F4F5F7',
+              borderRadius: '50%',
+            }}
+          />
+
+          {/* Poster */}
+          <img
+            src={moviePoster}
+            alt={movieTitle}
+            style={{
+              width: 60,
+              height: 84,
+              borderRadius: 6,
+              objectFit: 'cover',
+              flexShrink: 0,
+            }}
+          />
+
+          {/* Movie Details */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 16,
+                fontWeight: 800,
+                color: '#111827',
+                marginBottom: 4,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {movieTitle}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: '#4B5563',
+                  background: '#F3F4F6',
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                }}
+              >
+                {formatText}
+              </span>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  background: '#F97316',
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                }}
+              >
+                {ageRating}
+              </span>
+            </div>
+
+            <div style={{ fontSize: 12, color: '#4B5563', marginBottom: 2 }}>
+              {cinemaName} - {screenName}
+            </div>
+
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>
+              {formatShowDateTime(showDate, showTime)}
+            </div>
+          </div>
+        </div>
+
+        {/* Section Heading: Thông tin giao dịch */}
+        <div
+          style={{
+            padding: '14px 16px 6px',
+            fontSize: 13,
+            color: '#4B5563',
+            fontWeight: 600,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <span>Thông tin giao dịch</span>
+          {isSplitMode && (
+            <span style={{ fontSize: 11.5, color: '#F97316', fontWeight: 600 }}>
+              (Đơn hàng cá nhân của bạn)
+            </span>
+          )}
+        </div>
+
+        {/* Transaction Details Card */}
+        <div
+          style={{
+            margin: '0 16px',
+            background: '#FFFFFF',
+            borderRadius: 12,
+            padding: '14px 16px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          {isGroupMode && isHostPays && isHost ? (
+            /* HOST PAYS ALL: Host reviews breakdown for all members */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+              {memberOrderDetails.map(({ member, isMe, seatItems, fnbItems }) => {
                 return (
-                  <div
-                    key={m.id}
-                    onClick={() => setSelectedMethod(m.id)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '12px 14px',
-                      borderRadius: 12,
-                      border: isSelected ? '2px solid var(--orange)' : '1px solid var(--border)',
-                      background: isSelected ? '#FFF7ED' : 'var(--white)',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <div style={{ fontSize: 24 }}>{m.icon}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                          {m.name}
+                  <div key={member.userId || member.slot}>
+                    {/* Seats per member */}
+                    {seatItems.map((st, sIdx) => (
+                      <div
+                        key={sIdx}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: 13,
+                          padding: '2px 0',
+                        }}
+                      >
+                        <span style={{ color: '#111827' }}>
+                          <strong>1x</strong> {member.name} {isMe ? '(Host)' : ''} - {st.seatType} - {st.seatCode}
                         </span>
-                        {m.badge && (
-                          <span
-                            style={{
-                              fontSize: 9,
-                              fontWeight: 700,
-                              color: 'var(--white)',
-                              background: 'var(--orange)',
-                              padding: '1px 5px',
-                              borderRadius: 6,
-                            }}
-                          >
-                            {m.badge}
-                          </span>
-                        )}
+                        <span style={{ fontWeight: 600, color: '#111827' }}>
+                          {formatMoney(st.price)}
+                        </span>
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{m.desc}</div>
-                    </div>
-                    <div
-                      style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: '50%',
-                        border: isSelected ? '5px solid var(--orange)' : '2px solid var(--border)',
-                        background: 'var(--white)',
-                      }}
-                    />
+                    ))}
+
+                    {/* Combos per member */}
+                    {fnbItems.map((cb, cIdx) => (
+                      <div
+                        key={cIdx}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: 12.5,
+                          color: '#4B5563',
+                          padding: '2px 0 2px 14px',
+                        }}
+                      >
+                        <span>
+                          + {cb.quantity}x {cb.name} ({member.name})
+                        </span>
+                        <span>{formatMoney(cb.subtotal)}</span>
+                      </div>
+                    ))}
                   </div>
                 );
               })}
             </div>
+          ) : (
+            /* SPLIT PAYMENT OR SOLO: STRICTLY CURRENT USER'S ORDER ITEMS ONLY */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+              {/* Current user's seats */}
+              {mySeatItems.map((st, sIdx) => (
+                <div
+                  key={sIdx}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: 13,
+                    padding: '2px 0',
+                  }}
+                >
+                  <span style={{ color: '#111827' }}>
+                    <strong>1x</strong> Vé {st.seatType} - Ghế {st.seatCode}
+                  </span>
+                  <span style={{ fontWeight: 600, color: '#111827' }}>
+                    {formatMoney(st.price)}
+                  </span>
+                </div>
+              ))}
 
-            {/* Confirm Pay CTA */}
+              {/* Current user's combos */}
+              {myFnbItems.map((cb, cIdx) => (
+                <div
+                  key={cIdx}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: 12.5,
+                    color: '#4B5563',
+                    padding: '2px 0 2px 14px',
+                  }}
+                >
+                  <span>
+                    + {cb.quantity}x {cb.name}
+                  </span>
+                  <span>{formatMoney(cb.subtotal)}</span>
+                </div>
+              ))}
+
+              {mySeatItems.length === 0 && myFnbItems.length === 0 && (
+                <div style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', padding: '8px 0' }}>
+                  Không có đơn hàng cá nhân nào được ghi nhận.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Dashed Line */}
+          <div style={{ borderTop: '1px dashed #E5E7EB', margin: '10px 0' }} />
+
+          {/* Voucher & Total Row */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingTop: 4,
+            }}
+          >
             <button
-              className="cta-primary"
-              disabled={isSubmitting}
+              type="button"
               style={{
-                width: '100%',
-                padding: '14px',
-                fontSize: 15,
-                fontWeight: 700,
-                opacity: isSubmitting ? 0.6 : 1,
+                border: '1px solid #F97316',
+                background: '#FFF7ED',
+                color: '#EA580C',
+                fontSize: 12,
+                fontWeight: 600,
+                borderRadius: 6,
+                padding: '4px 10px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
               }}
-              onClick={handleConfirmPay}
+              onClick={() => setIsStarsApplied(!isStarsApplied)}
             >
-              {isSubmitting ? 'Đang xử lý giao dịch...' : `Xác nhận thanh toán ${formatMoney(modalTarget.amount)} →`}
+              <span>Khuyến mãi</span>
+              <span>›</span>
             </button>
-          </div>
-        </div>
-      )}
 
-      {/* Bottom Bar: Continue to Ticket if All Paid */}
-      <div className="bottom-bar">
-        <div className="info">
-          <div className="label">
-            {isAllPaid ? 'Trạng thái phòng:' : `Đã thu (${paidCount}/${totalMembersCount}):`}
-          </div>
-          <div className="value" style={{ color: isAllPaid ? '#16A34A' : 'var(--text-primary)' }}>
-            {isAllPaid ? '✓ Toàn bộ đã thanh toán' : formatMoney(totalSessionAmount)}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 13, color: '#4B5563' }}>Tổng Cộng</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#F97316' }}>
+                {formatMoney(finalTotalAmount)}
+              </span>
+            </div>
           </div>
         </div>
-        <button
-          className="cta-primary"
-          style={{ background: isAllPaid ? '#16A34A' : 'var(--orange)' }}
-          onClick={() => goTo('screen-confirmed')}
+
+        {/* Section Heading: Áp dụng điểm Stars */}
+        <div
+          style={{
+            padding: '16px 16px 6px',
+            fontSize: 13,
+            color: '#4B5563',
+            fontWeight: 600,
+          }}
         >
-          {isAllPaid ? 'Xem vé ngay →' : 'Tiếp tục →'}
-        </button>
+          Áp dụng điểm Stars
+        </div>
+
+        {/* Stars Card */}
+        <div
+          style={{
+            margin: '0 16px',
+            background: '#FFFFFF',
+            borderRadius: 12,
+            padding: '14px 16px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+          }}
+          onClick={() => setIsStarsApplied(!isStarsApplied)}
+        >
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: '#111827' }}>
+            {isStarsApplied ? '✓ Đã áp dụng 1 Stars giảm 1,000 VND' : '1 Stars giảm 1,000 VND'}
+          </div>
+          <span style={{ fontSize: 16, color: isStarsApplied ? '#16A34A' : '#9CA3AF' }}>
+            {isStarsApplied ? '✕ Hủy' : '›'}
+          </span>
+        </div>
+
+        {/* Section Heading: Thông tin thanh toán */}
+        <div
+          style={{
+            padding: '16px 16px 6px',
+            fontSize: 13,
+            color: '#4B5563',
+            fontWeight: 600,
+          }}
+        >
+          Thông tin thanh toán
+        </div>
+
+        {/* Payment Methods List */}
+        <div
+          style={{
+            margin: '0 16px',
+            background: '#FFFFFF',
+            borderRadius: 12,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            overflow: 'hidden',
+          }}
+        >
+          {PAYMENT_OPTIONS.map((opt, idx) => {
+            const isSelected = selectedMethodIndex === idx;
+            const isLast = idx === PAYMENT_OPTIONS.length - 1;
+
+            return (
+              <div
+                key={idx}
+                onClick={() => setSelectedMethodIndex(idx)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '14px 16px',
+                  borderBottom: isLast ? 'none' : '1px solid #F3F4F6',
+                  cursor: 'pointer',
+                  background: isSelected ? '#FFFAF5' : '#FFFFFF',
+                  transition: 'background 0.15s ease',
+                }}
+              >
+                {/* Method Icon / Badge */}
+                <div
+                  style={{
+                    width: 36,
+                    height: 24,
+                    borderRadius: 4,
+                    background: opt.iconBg,
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 8.5,
+                    fontWeight: 800,
+                    letterSpacing: '0.2px',
+                    flexShrink: 0,
+                  }}
+                >
+                  {opt.iconText}
+                </div>
+
+                {/* Method Title */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: '#111827',
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {opt.name}
+                  </div>
+                </div>
+
+                {/* Radio Button */}
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    border: isSelected ? '6px solid #F97316' : '2px solid #D1D5DB',
+                    background: '#FFFFFF',
+                    flexShrink: 0,
+                    transition: 'border 0.15s ease',
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Bottom Sticky Payment Bar */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: '#FFFFFF',
+          borderTop: '1px solid #E5E7EB',
+          padding: '12px 16px 18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 -4px 12px rgba(0,0,0,0.06)',
+          zIndex: 50,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 13.5, color: '#4B5563' }}>Tổng Cộng:</span>
+          <span style={{ fontSize: 17, fontWeight: 800, color: '#F97316' }}>
+            {formatMoney(finalTotalAmount)}
+          </span>
+        </div>
+
+        {isSplitMode && hasPaidMyShare ? (
+          <button
+            type="button"
+            onClick={() => {
+              if (isAllPaid) {
+                goTo('screen-ticket');
+              }
+            }}
+            disabled={!isAllPaid}
+            style={{
+              background: isAllPaid ? '#16A34A' : '#9CA3AF',
+              color: '#FFFFFF',
+              fontSize: 14,
+              fontWeight: 700,
+              padding: '11px 20px',
+              borderRadius: 8,
+              border: 'none',
+              cursor: isAllPaid ? 'pointer' : 'default',
+            }}
+          >
+            {isAllPaid ? 'Xem vé ngay →' : '✓ Đã thanh toán (Chờ nhóm)'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={isSubmitting || paymentStatus === 'PAYMENT_PROCESSING'}
+            onClick={handlePayment}
+            style={{
+              background: '#F97316',
+              color: '#FFFFFF',
+              fontSize: 15,
+              fontWeight: 700,
+              padding: '11px 24px',
+              borderRadius: 8,
+              border: 'none',
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              opacity: isSubmitting ? 0.7 : 1,
+              transition: 'opacity 0.2s ease',
+            }}
+          >
+            {isSubmitting ? 'Đang xử lý...' : 'Thanh toán'}
+          </button>
+        )}
       </div>
     </div>
   );

@@ -143,6 +143,40 @@ export interface PaymentSummaryResponse {
   members: MemberPaymentInfo[];
 }
 
+export interface IssuedTicket {
+  id: string;
+  ticketCode: string;
+  qrPayload: string;
+  status: string;
+  seatId: string;
+  seatCode: string;
+  price: number;
+  memberId: string;
+  userId: string;
+  memberName: string;
+  colorSlot: string;
+  role?: string;
+  createdAt?: string;
+}
+
+export type PaymentStatus =
+  | 'IDLE'
+  | 'PAYMENT_PENDING'
+  | 'PAYMENT_PROCESSING'
+  | 'PAYMENT_SUCCESS'
+  | 'PAYMENT_FAILED';
+
+export type GroupOrderStatus =
+  | 'DRAFT'
+  | 'MEMBERS_CONFIRMING'
+  | 'WAITING_FOR_HOST_PAYMENT'
+  | 'READY_FOR_PAYMENT'
+  | 'PAYMENT_PROCESSING'
+  | 'PAID'
+  | 'TICKETS_ISSUED'
+  | 'EXPIRED'
+  | 'CANCELLED';
+
 export type { GroupSessionDetailResponseData, GroupMemberResponse };
 
 

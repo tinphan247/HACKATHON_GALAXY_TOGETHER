@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useGroupSession } from '../context/GroupSessionContext';
 import { useToast } from '../context/ToastContext';
 import { RealQrCode } from '../components/common/RealQrCode';
@@ -23,19 +23,34 @@ export const ETicketScreen: React.FC = () => {
     comboPrices,
     resetToHome,
     selectedShowtime,
+    issuedTickets,
   } = useGroupSession();
 
   const { showToast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedTicketUserId, setSelectedTicketUserId] = useState<string | null>(null);
+
+  // Active ticket determination: default to current user's ticket if in issuedTickets
+  const currentUserId = currentUser?.userId;
+  const activeTicket = useMemo(() => {
+    if (!issuedTickets || issuedTickets.length === 0) return null;
+    if (selectedTicketUserId) {
+      return issuedTickets.find((t) => t.userId === selectedTicketUserId) || issuedTickets[0];
+    }
+    const mine = issuedTickets.find((t) => t.userId === currentUserId);
+    return mine || issuedTickets[0];
+  }, [issuedTickets, selectedTicketUserId, currentUserId]);
 
   const code = inviteCode || sessionData?.invite?.code || 'GLX-892';
-  const mySeatStr = mySeats.length > 0 ? mySeats.join(', ') : 'G9';
-  const mySeatCompact = mySeats.length > 0 ? mySeats.join('') : 'G9';
-  const myName = currentUser?.name || 'TÍN';
-  const ticketPayload = `GLX-TICKET:${code}:${myName.toUpperCase()}:${mySeatCompact}`;
+  const mySeatStr = activeTicket ? activeTicket.seatCode : mySeats.length > 0 ? mySeats.join(', ') : 'G9';
+  const mySeatCompact = activeTicket ? activeTicket.seatCode : mySeats.length > 0 ? mySeats.join('') : 'G9';
+  const myName = activeTicket ? activeTicket.memberName : currentUser?.name || 'TÍN';
+  const ticketPayload = activeTicket ? activeTicket.qrPayload : `GLX-TICKET:${code}:${myName.toUpperCase()}:${mySeatCompact}`;
 
-  const rawNum = (code || '').replace(/\D/g, '');
-  const ticketCodeDisplay = rawNum ? rawNum.padEnd(6, '5').slice(0, 6) : '138055';
+  const ticketCodeDisplay = activeTicket
+    ? activeTicket.ticketCode.replace('GLX-', '')
+    : (code || '').replace(/\D/g, '').padEnd(6, '5').slice(0, 6) || '138055';
+
 
   const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Quý Tử Vượt Giàu';
   const moviePoster = selectedShowtime?.moviePoster || '/posters/poster_quytuvuotgiau.jpg';
@@ -147,6 +162,51 @@ export const ETicketScreen: React.FC = () => {
 
       {/* Main Body */}
       <div className="body" style={{ paddingBottom: 24, background: '#F5F5F7' }}>
+        {/* Ticket Switcher Tabs (if multiple tickets issued) */}
+        {issuedTickets && issuedTickets.length > 1 && (
+          <div
+            style={{
+              padding: '0 16px 12px',
+              display: 'flex',
+              gap: 8,
+              overflowX: 'auto',
+              scrollbarWidth: 'none',
+            }}
+          >
+            {issuedTickets.map((t) => {
+              const isSelected = activeTicket?.id === t.id;
+              const isMine = t.userId === currentUserId;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setSelectedTicketUserId(t.userId)}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 20,
+                    border: isSelected ? '1.5px solid #F97316' : '1px solid #D1D5DB',
+                    background: isSelected ? '#F97316' : '#FFFFFF',
+                    color: isSelected ? '#FFFFFF' : '#374151',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    boxShadow: isSelected ? '0 2px 6px rgba(249,115,22,0.25)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span>{t.memberName}</span>
+                  {isMine && <span style={{ opacity: 0.85, fontSize: 10 }}>(Bạn)</span>}
+                  <span style={{ fontSize: 11, opacity: isSelected ? 0.9 : 0.6 }}>• {t.seatCode}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Ticket Voucher Card */}
         <div className="ticket-voucher">
           {/* Movie Header */}

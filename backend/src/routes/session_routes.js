@@ -272,13 +272,29 @@ router.post('/:id/payments/member', async (req, res, next) => {
       summary: result.summary,
     });
 
-    // If whole session is confirmed, broadcast SESSION_CONFIRMED
+    // If whole session is confirmed, broadcast SESSION_CONFIRMED, GROUP_PAYMENT_SUCCESS, and GROUP_TICKETS_ISSUED
     if (result.isConfirmed) {
       realtimeGateway.broadcast(req.params.id, 'SESSION_CONFIRMED', {
         sessionId: req.params.id,
         totalAmount: result.summary?.totalSessionAmount,
         summary: result.summary,
       });
+
+      realtimeGateway.broadcast(req.params.id, 'GROUP_PAYMENT_SUCCESS', {
+        groupSessionId: req.params.id,
+        paymentId: result.payment?.id,
+        status: 'SUCCESS',
+        paidBy: result.payerUserId || userId,
+        totalAmount: result.summary?.totalSessionAmount,
+        timestamp: new Date().toISOString(),
+      });
+
+      if (result.tickets && result.tickets.length > 0) {
+        realtimeGateway.broadcast(req.params.id, 'GROUP_TICKETS_ISSUED', {
+          groupSessionId: req.params.id,
+          tickets: result.tickets,
+        });
+      }
     }
 
     res.json({
@@ -313,6 +329,24 @@ router.post('/:id/payments/host-all', async (req, res, next) => {
       summary: result.summary,
     });
 
+    // Broadcast GROUP_PAYMENT_SUCCESS
+    realtimeGateway.broadcast(req.params.id, 'GROUP_PAYMENT_SUCCESS', {
+      groupSessionId: req.params.id,
+      groupOrderId: result.bookingId,
+      paymentId: result.payment?.id,
+      status: 'SUCCESS',
+      paidBy: hostUserId,
+      totalAmount: result.payment?.amount,
+      timestamp: result.payment?.paidAt || new Date().toISOString(),
+    });
+
+    // Broadcast GROUP_TICKETS_ISSUED
+    realtimeGateway.broadcast(req.params.id, 'GROUP_TICKETS_ISSUED', {
+      groupSessionId: req.params.id,
+      groupOrderId: result.bookingId,
+      tickets: result.tickets || [],
+    });
+
     res.json({
       success: true,
       data: result
@@ -322,6 +356,20 @@ router.post('/:id/payments/host-all', async (req, res, next) => {
   }
 });
 
+// GET /api/group-sessions/:id/tickets - Get all issued tickets for a session
+router.get('/:id/tickets', async (req, res, next) => {
+  try {
+    const tickets = await SessionService.getSessionTickets(req.params.id);
+    res.json({
+      success: true,
+      data: tickets
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
+
 
 

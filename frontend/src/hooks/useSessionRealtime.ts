@@ -13,6 +13,8 @@ interface UseSessionRealtimeOptions {
   onPaymentUpdated?: (payload: RealtimeEvent['payload']) => void;
   onSessionConfirmed?: (payload: RealtimeEvent['payload']) => void;
   onHoldTimerStarted?: (payload: RealtimeEvent['payload']) => void;
+  onGroupPaymentSuccess?: (payload: RealtimeEvent['payload']) => void;
+  onGroupTicketsIssued?: (payload: RealtimeEvent['payload']) => void;
   onReconnected?: () => void;
 }
 
@@ -28,6 +30,8 @@ export function useSessionRealtime({
   onPaymentUpdated,
   onSessionConfirmed,
   onHoldTimerStarted,
+  onGroupPaymentSuccess,
+  onGroupTicketsIssued,
   onReconnected,
 }: UseSessionRealtimeOptions) {
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>(realtimeService.getStatus());
@@ -43,6 +47,8 @@ export function useSessionRealtime({
     onPaymentUpdated,
     onSessionConfirmed,
     onHoldTimerStarted,
+    onGroupPaymentSuccess,
+    onGroupTicketsIssued,
     onReconnected,
   });
 
@@ -57,6 +63,8 @@ export function useSessionRealtime({
       onPaymentUpdated,
       onSessionConfirmed,
       onHoldTimerStarted,
+      onGroupPaymentSuccess,
+      onGroupTicketsIssued,
       onReconnected,
     };
   });
@@ -106,6 +114,12 @@ export function useSessionRealtime({
         case 'SESSION_CONFIRMED':
         case 'GROUP_MEMBER_BOOKING_CONFIRMED':
           callbacksRef.current.onSessionConfirmed?.(event.payload);
+          break;
+        case 'GROUP_PAYMENT_SUCCESS':
+          callbacksRef.current.onGroupPaymentSuccess?.(event.payload);
+          break;
+        case 'GROUP_TICKETS_ISSUED':
+          callbacksRef.current.onGroupTicketsIssued?.(event.payload);
           break;
         default:
           break;

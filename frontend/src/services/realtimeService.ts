@@ -19,6 +19,8 @@ export interface RealtimeEvent {
     | 'FNB_UPDATED'
     | 'PAYMENT_UPDATED'
     | 'SESSION_CONFIRMED'
+    | 'GROUP_PAYMENT_SUCCESS'
+    | 'GROUP_TICKETS_ISSUED'
     | 'CONNECTED'
     | 'SUBSCRIBED'
     | 'PONG';
@@ -55,6 +57,14 @@ export interface RealtimeEvent {
     isAllPaid?: boolean;
     isConfirmed?: boolean;
     summary?: unknown;
+    // Group Payment & Ticket payload
+    groupSessionId?: string;
+    groupOrderId?: string;
+    paymentId?: string;
+    status?: string;
+    paidBy?: string;
+    totalAmount?: number;
+    tickets?: any[];
   };
   timestamp?: string;
 }
