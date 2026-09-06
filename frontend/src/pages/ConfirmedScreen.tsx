@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useGroupSession } from '../context/GroupSessionContext';
 import { StatusBar } from '../components/common/StatusBar';
 import { Header } from '../components/common/Header';
+import { resolveMoviePoster, resolveMovieAgeRating } from '../utils/movieUtils';
 
 const COMBO_DETAILS: Record<string, { name: string; price: number; desc?: string }> = {
   c1: { name: 'Combo 1 Big Extra', price: 115000, desc: '1 Bắp lớn + 1 Nước lớn + 1 Snack' },
@@ -36,14 +37,22 @@ export const GroupOrderConfirmationScreen: React.FC = () => {
   const activeMembers = displayMembers.filter((m) => m.status !== 'EMPTY');
 
   // Dynamic movie & theater data from state/session
-  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Vé đã chọn';
-  const moviePoster = selectedShowtime?.moviePoster || '/posters/poster_quytuvuotgiau.jpg';
+  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Chi tiết phim';
+  const moviePoster = resolveMoviePoster(
+    movieTitle,
+    sessionData?.movie_id || selectedShowtime?.movieId,
+    selectedShowtime?.moviePoster
+  );
   const cinemaName = sessionData?.cinema_name || selectedShowtime?.cinemaName || 'Galaxy Cinema';
   const showTime = sessionData?.show_time || selectedShowtime?.showTime || '21:00';
   const showDate = sessionData?.show_date || selectedShowtime?.showDate || '07/09/2026';
   const screenName = sessionData?.screen_name || selectedShowtime?.screenName || 'Rạp 3';
   const formatText = selectedShowtime?.format || '2D PHỤ ĐỀ';
-  const ageRating = selectedShowtime?.movieAgeRating || 'T16';
+  const ageRating = resolveMovieAgeRating(
+    movieTitle,
+    sessionData?.movie_id || selectedShowtime?.movieId,
+    selectedShowtime?.movieAgeRating
+  );
 
   const standardPrice = selectedShowtime?.ticketPriceStandard || 55000;
   const vipPrice = selectedShowtime?.ticketPriceVip || 65000;
@@ -291,7 +300,7 @@ export const GroupOrderConfirmationScreen: React.FC = () => {
                         {member.name} {isMe ? '(Bạn)' : ''}
                       </div>
                       <div style={{ fontSize: 11, color: '#64748B' }}>
-                        {member.isHost ? '👑 Chủ nhóm' : 'Thành viên'}
+                        {member.isHost ? 'Chủ nhóm' : 'Thành viên'}
                       </div>
                     </div>
                   </div>
@@ -426,7 +435,6 @@ export const GroupOrderConfirmationScreen: React.FC = () => {
               textAlign: 'center',
             }}
           >
-            <div style={{ fontSize: 24, marginBottom: 6 }}>⏳</div>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#B45309', marginBottom: 4 }}>
               Đang chờ chủ nhóm thanh toán
             </div>

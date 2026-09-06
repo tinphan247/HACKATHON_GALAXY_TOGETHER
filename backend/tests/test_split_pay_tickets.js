@@ -1,7 +1,8 @@
 import WebSocket from 'ws';
+import { server } from '../src/server.js';
 
-const API_BASE = 'http://localhost:3000/api';
-const WS_BASE = 'ws://localhost:3000/ws';
+let API_BASE;
+let WS_BASE;
 
 async function request(path, options = {}) {
   const url = `${API_BASE}${path}`;
@@ -33,6 +34,21 @@ function sleep(ms) {
 }
 
 async function runSplitPayTest() {
+  await new Promise((resolve) => {
+    if (server.listening) {
+      const port = server.address().port;
+      API_BASE = `http://localhost:${port}/api`;
+      WS_BASE = `ws://localhost:${port}/ws`;
+      return resolve();
+    }
+    server.listen(0, () => {
+      const port = server.address().port;
+      API_BASE = `http://localhost:${port}/api`;
+      WS_BASE = `ws://localhost:${port}/ws`;
+      resolve();
+    });
+  });
+
   console.log('🤝 [SPLIT_PAY Test] Starting Split Payment Flow Integration Test...\n');
   const showtimeId = `st_split_test_${Date.now()}`;
 
@@ -119,7 +135,12 @@ async function runSplitPayTest() {
   console.assert(hostPayRes.status === 200, 'Host pay failed');
   console.assert(hostPayRes.data.data.isAllPaid === false, 'isAllPaid should be false after Host alone pays');
   console.assert(hostPayRes.data.data.isConfirmed === false, 'isConfirmed should be false after Host alone pays');
-  console.log('  ✅ [PASS] Host paid only their share; group is NOT yet confirmed (1/2 paid)');
+  console.assert(Array.isArray(hostPayRes.data.data.tickets) && hostPayRes.data.data.tickets.length === 1, 'Host should receive their ticket immediately');
+  console.log('  ✅ [PASS] Host received individual ticket immediately (1/2 members paid, tickets issued: 1)');
+
+  const intermediateTickets = await request(`/group-sessions/${sessionId}/tickets`);
+  console.assert(intermediateTickets.status === 200 && intermediateTickets.data.data.length === 1, 'GET /tickets should return 1 ticket so far');
+  console.log('  ✅ [PASS] GET /tickets confirmed 1 individual ticket available before group finishes payment');
 
   // 6. Member pays ONLY their own share (55.000đ)
   const memberPayRes = await request(`/group-sessions/${sessionId}/payments/member`, {
@@ -156,7 +177,9 @@ async function runSplitPayTest() {
   console.log('  ✅ [PASS] Member WebSocket received GROUP_TICKETS_ISSUED');
 
   memberWs.close();
+  server.close();
   console.log('\n🏁 [Result] Split-Payment integration verified: 10/10 checks PASSED!\n');
+  process.exit(0);
 }
 
 runSplitPayTest().catch((err) => {

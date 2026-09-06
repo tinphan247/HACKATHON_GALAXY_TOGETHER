@@ -4,6 +4,7 @@ import { useToast } from '../context/ToastContext';
 import { StatusBar } from '../components/common/StatusBar';
 import { CountdownBanner } from '../components/common/CountdownBanner';
 import type { PaymentMethod } from '../types/session';
+import { resolveMoviePoster, resolveMovieAgeRating } from '../utils/movieUtils';
 
 interface PaymentMethodOption {
   id: PaymentMethod;
@@ -113,14 +114,22 @@ export const PaymentScreen: React.FC = () => {
   const totalMembersCount = Math.max(1, activeMembers.length);
 
   // Dynamic movie & cinema information
-  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Hope Vùng Tử Địa';
-  const moviePoster = selectedShowtime?.moviePoster || '/posters/poster_quytuvuotgiau.jpg';
+  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Chi tiết phim';
+  const moviePoster = resolveMoviePoster(
+    movieTitle,
+    sessionData?.movie_id || selectedShowtime?.movieId,
+    selectedShowtime?.moviePoster
+  );
   const cinemaName = sessionData?.cinema_name || selectedShowtime?.cinemaName || 'Galaxy Cinema Nguyễn Văn Quá';
   const screenName = sessionData?.screen_name || selectedShowtime?.screenName || 'RAP 4';
   const showTime = sessionData?.show_time || selectedShowtime?.showTime || '20:15';
   const showDate = sessionData?.show_date || selectedShowtime?.showDate || '06/09/2026';
   const formatText = selectedShowtime?.format || '2D PHỤ ĐỀ';
-  const ageRating = selectedShowtime?.movieAgeRating || 'T16';
+  const ageRating = resolveMovieAgeRating(
+    movieTitle,
+    sessionData?.movie_id || selectedShowtime?.movieId,
+    selectedShowtime?.movieAgeRating
+  );
 
   const standardPrice = selectedShowtime?.ticketPriceStandard || 55000;
   const vipPrice = selectedShowtime?.ticketPriceVip || 65000;
@@ -351,6 +360,7 @@ export const PaymentScreen: React.FC = () => {
         const success = await payMyShare(selectedMethod);
         if (success) {
           await loadPaymentSummary();
+          goTo('screen-ticket');
         }
       } else {
         // Solo payment
@@ -425,7 +435,7 @@ export const PaymentScreen: React.FC = () => {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <span style={{ fontSize: 12.5, fontWeight: 700, color: hasPaidMyShare ? '#065F46' : '#9A3412' }}>
-                  {hasPaidMyShare ? '✓ Bạn đã thanh toán phần của mình' : '🤝 Chế độ: Mỗi người tự thanh toán phần mình'}
+                  {hasPaidMyShare ? 'Bạn đã thanh toán phần của mình' : 'Chế độ: Mỗi người tự thanh toán phần mình'}
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: isAllPaid ? '#16A34A' : '#F97316' }}>
                   {paidCount}/{totalMembersCount} bạn đã trả {isAllPaid ? '(Hoàn tất)' : ''}
@@ -434,8 +444,8 @@ export const PaymentScreen: React.FC = () => {
               <div style={{ fontSize: 11.5, color: hasPaidMyShare ? '#047857' : '#7C2D12', lineHeight: 1.4 }}>
                 {hasPaidMyShare
                   ? isAllPaid
-                    ? 'Toàn bộ nhóm đã thanh toán hoàn tất! Bạn có thể xem vé QR ngay.'
-                    : `Hệ thống đang chờ ${Math.max(0, totalMembersCount - paidCount)} bạn bè còn lại thanh toán. Khi cả nhóm hoàn tất, vé điện tử QR sẽ tự động hiển thị.`
+                    ? 'Toàn bộ nhóm đã thanh toán hoàn tất! Bạn có thể xem vé QR của mình ngay.'
+                    : `Bạn đã thanh toán phần mình thành công! Hệ thống đang chờ ${Math.max(0, totalMembersCount - paidCount)} bạn bè còn lại. Bạn có thể nhấn nút "Xem vé của bạn" bên dưới để kiểm tra vé QR bất cứ lúc nào.`
                   : 'Tiền vé ghế và combo bên dưới chỉ bao gồm phần của bạn. Bạn tự thanh toán độc lập không bị tính trùng đơn người khác.'}
               </div>
             </div>
@@ -879,24 +889,23 @@ export const PaymentScreen: React.FC = () => {
         {isSplitMode && hasPaidMyShare ? (
           <button
             type="button"
-            onClick={() => {
-              if (isAllPaid) {
-                goTo('screen-ticket');
-              }
-            }}
-            disabled={!isAllPaid}
+            onClick={() => goTo('screen-ticket')}
             style={{
-              background: isAllPaid ? '#16A34A' : '#9CA3AF',
+              background: '#16A34A',
               color: '#FFFFFF',
               fontSize: 14,
               fontWeight: 700,
-              padding: '11px 20px',
+              padding: '11px 22px',
               borderRadius: 8,
               border: 'none',
-              cursor: isAllPaid ? 'pointer' : 'default',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)',
             }}
           >
-            {isAllPaid ? 'Xem vé ngay →' : '✓ Đã thanh toán (Chờ nhóm)'}
+            <span>Xem vé của bạn →</span>
           </button>
         ) : (
           <button

@@ -5,7 +5,7 @@ import { StatusBar } from '../components/common/StatusBar';
 import { Header } from '../components/common/Header';
 import { CountdownBanner } from '../components/common/CountdownBanner';
 import { GroupShareModal } from '../components/common/GroupShareModal';
-import { getMemberColor } from '../constants/theme';
+import { getMemberColor, getMemberColorByKey } from '../constants/theme';
 import { seatRepository } from '../services/data/seatRepository';
 import { showtimeRepository } from '../services/data/showtimeRepository';
 import { groupSessionService } from '../services/groupSessionService';
@@ -160,6 +160,24 @@ export const SeatSelectionScreen: React.FC = () => {
   const activeMembers = displayMembers.filter((m) => m.status !== 'EMPTY');
   const formatMoney = (n: number) => n.toLocaleString('vi-VN') + 'đ';
 
+  // Determine current user's member color slot in group session
+  const myMemberSession = sessionData?.members?.find(
+    (m) => m.user_id === currentUser?.userId || (currentUser?.name && m.name?.toLowerCase() === currentUser.name.toLowerCase())
+  );
+  const myActiveMember = activeMembers.find(
+    (m) => m.userId === currentUser?.userId || (currentUser?.name && m.name?.toLowerCase() === currentUser.name.toLowerCase())
+  );
+  const myMemberIdx = myMemberSession
+    ? sessionData?.members?.indexOf(myMemberSession) ?? -1
+    : myActiveMember
+    ? myActiveMember.slot
+    : (currentUser?.isHost ? 0 : 1);
+  const myAssignedColor = myMemberSession?.color_slot
+    ? getMemberColorByKey(myMemberSession.color_slot)
+    : myActiveMember?.colorHex
+    ? { key: myActiveMember.colorKey, hex: myActiveMember.colorHex }
+    : getMemberColor(myMemberIdx >= 0 ? myMemberIdx : 0);
+
   return (
     <div className="screen">
       <StatusBar />
@@ -262,7 +280,6 @@ export const SeatSelectionScreen: React.FC = () => {
       {/* Group Context Bar with Dynamic Member Avatars */}
       {isGroupMode && (
         <div className="group-ctx" style={{ padding: '7px 16px' }}>
-          <div className="icon" style={{ fontSize: 14 }}>🎬</div>
           <div className="info">
             <div className="name" style={{ fontSize: 12 }}>
               {sessionData?.name || 'Phòng vé nhóm'} • Mỗi người chọn 1 ghế
@@ -334,6 +351,12 @@ export const SeatSelectionScreen: React.FC = () => {
                         } else if (isMine) {
                           seatClass += ' my-seat';
                           seatText = currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : '✓';
+                          if (isGroupMode) {
+                            const myBg = holdInfo?.colorHex || myAssignedColor.hex;
+                            seatStyle.background = myBg;
+                            seatStyle.borderColor = myBg;
+                            seatStyle.color = '#FFFFFF';
+                          }
                         } else if (isOtherHold) {
                           seatClass += ' held-other';
                           const member = sessionData?.members?.find(
@@ -459,8 +482,8 @@ export const SeatSelectionScreen: React.FC = () => {
           <div
             className="legend-box"
             style={{
-              background: '#F97316',
-              border: '1.5px solid #EA580C',
+              background: isGroupMode ? myAssignedColor.hex : '#F97316',
+              border: `1.5px solid ${isGroupMode ? myAssignedColor.hex : '#EA580C'}`,
               color: '#FFFFFF',
               display: 'flex',
               alignItems: 'center',
@@ -471,7 +494,7 @@ export const SeatSelectionScreen: React.FC = () => {
           >
             ✓
           </div>
-          <span>Đang chọn</span>
+          <span>Đang chọn {isGroupMode ? '(Bạn)' : ''}</span>
         </div>
         {isGroupMode &&
           activeMembers.map((m) => (

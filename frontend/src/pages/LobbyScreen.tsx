@@ -26,7 +26,7 @@ export const LobbyScreen: React.FC = () => {
 
   const isWsConnected = realtimeStatus === 'CONNECTED';
   const statusColor = isWsConnected ? '#10B981' : realtimeStatus === 'RECONNECTING' ? '#F59E0B' : '#CA8A04';
-  const statusLabel = isWsConnected ? '⚡ LIVE WS' : realtimeStatus === 'RECONNECTING' ? '◌ TÁI KẾT NỐI' : 'POLLING';
+  const statusLabel = isWsConnected ? 'LIVE WS' : realtimeStatus === 'RECONNECTING' ? 'TÁI KẾT NỐI' : 'POLLING';
 
   return (
     <div className="screen">
@@ -66,7 +66,6 @@ export const LobbyScreen: React.FC = () => {
 
       {/* Group context bar */}
       <div className="group-ctx">
-        <div className="icon">🎬</div>
         <div className="info">
           <div className="name">
             {sessionData?.name || 'Friday Movie Night'} • Mã: {code}
@@ -79,7 +78,7 @@ export const LobbyScreen: React.FC = () => {
 
       {/* Realtime activity ticker */}
       <div className="activity-ticker visible" id="lobby-ticker">
-        📡 {currentCount >= 2 ? `Đã có ${currentCount} thành viên trong phòng!` : 'Đang chờ bạn bè quét mã tham gia...'}
+        {currentCount >= 2 ? `Đã có ${currentCount} thành viên trong phòng!` : 'Đang chờ bạn bè quét mã tham gia...'}
       </div>
 
       <div className="body">

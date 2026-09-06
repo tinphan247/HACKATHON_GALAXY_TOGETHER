@@ -26,6 +26,7 @@ import { realtimeService, type RealtimeStatus } from '../services/realtimeServic
 import { movieRepository } from '../services/data/movieRepository';
 import { theaterRepository } from '../services/data/theaterRepository';
 import { showtimeRepository } from '../services/data/showtimeRepository';
+import { resolveMoviePoster, resolveMovieAgeRating } from '../utils/movieUtils';
 
 interface GroupSessionContextType {
   currentScreen: ScreenId;
@@ -115,8 +116,10 @@ interface GroupSessionContextType {
 }
 
 const DEFAULT_SHOWTIME: ShowtimeSelection = {
-  movieId: 'mv-01',
-  movieTitle: 'Quý Tử Vượt Giàu',
+  movieId: 'mv-hope',
+  movieTitle: 'Hope Vùng Tử Địa',
+  moviePoster: '/posters/poster_hope.jpg',
+  movieAgeRating: 'T16',
   cinemaId: 'cin-nvq',
   cinemaName: 'Galaxy Cinema Nguyễn Văn Quá',
   showDate: '07/09/2026',
@@ -441,6 +444,22 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setIsHoldTimerStarted(true);
         setHoldExpiresAt(new Date((data as unknown as { seat_hold_expires_at: string }).seat_hold_expires_at));
       }
+      if (data.movie_title || data.movie_id) {
+        const poster = resolveMoviePoster(data.movie_title, data.movie_id);
+        const ageRating = resolveMovieAgeRating(data.movie_title, data.movie_id);
+        setSelectedShowtime((prev) => ({
+          ...prev,
+          showtimeId: data.showtime_id || prev.showtimeId,
+          showTime: data.show_time || prev.showTime,
+          showDate: data.show_date || prev.showDate,
+          movieId: data.movie_id || prev.movieId,
+          movieTitle: data.movie_title || prev.movieTitle,
+          moviePoster: poster,
+          movieAgeRating: ageRating,
+          cinemaName: data.cinema_name || prev.cinemaName,
+          screenName: data.screen_name || prev.screenName,
+        }));
+      }
       if (data.status === 'CONFIRMED') {
         loadSessionTickets(id);
         setPaymentStatus('PAYMENT_SUCCESS');
@@ -552,6 +571,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         loadPaymentSummaryRef.current();
       } else if (currentScreen === 'screen-ticket') {
         loadSessionTicketsRef.current();
+        loadPaymentSummaryRef.current();
       }
     }
   }, [isGroupMode, sessionId, currentScreen]);
@@ -578,7 +598,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         };
       });
       refreshSessionDataRef.current();
-      showToast(`⚡ ${newMember.name} vừa tham gia nhóm! (Realtime WS)`);
+      showToast(`${newMember.name} vừa tham gia nhóm! (Realtime WS)`);
     },
     onMemberLeft: (payload) => {
       const leftUserId = payload?.userId || payload?.member?.user_id;
@@ -591,7 +611,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         };
       });
       refreshSessionDataRef.current();
-      showToast('ℹ️ Một thành viên đã rời nhóm.');
+      showToast('Một thành viên đã rời nhóm.');
     },
     onSeatHeld: (payload) => {
       if (!payload?.seatId) return;
@@ -610,7 +630,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         },
       }));
       if (payload.userId !== currentUser?.userId) {
-        showToast(`💺 ${payload.memberName || 'Một bạn'} vừa chọn ghế ${payload.seatCode || seatId}`);
+        showToast(`${payload.memberName || 'Một bạn'} vừa chọn ghế ${payload.seatCode || seatId}`);
       }
     },
     onSeatReleased: (payload) => {
@@ -622,20 +642,21 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return next;
       });
       if (payload.userId !== currentUser?.userId) {
-        showToast(`💺 ${payload.memberName || 'Một bạn'} đã bỏ chọn ghế ${seatId}`);
+        showToast(`${payload.memberName || 'Một bạn'} đã bỏ chọn ghế ${seatId}`);
       }
     },
     onFnBUpdated: (payload) => {
       if (!payload) return;
       setGroupFnBSummary(payload as unknown as GroupFnBSummary);
-      showToast('🍿 Bắp nước nhóm vừa được cập nhật!');
+      showToast('Bắp nước nhóm vừa được cập nhật!');
     },
     onPaymentUpdated: (payload) => {
       if (!payload) return;
       loadPaymentSummaryRef.current();
       refreshSessionDataRef.current();
+      loadSessionTicketsRef.current();
       const methodStr = payload.paymentMethod ? ` qua ví ${payload.paymentMethod.toUpperCase()}` : '';
-      showToast(`💳 ${payload.memberName || 'Một bạn'} đã thanh toán thành công${methodStr}!`);
+      showToast(`${payload.memberName || 'Một bạn'} đã thanh toán thành công${methodStr}!`);
     },
     onHoldTimerStarted: (payload) => {
       setIsHoldTimerStarted(true);
@@ -644,7 +665,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       } else {
         setHoldExpiresAt(new Date(Date.now() + 10 * 60 * 1000));
       }
-      showToast('⏱️ Đếm ngược giữ ghế 10 phút đã bắt đầu!');
+      showToast('Đếm ngược giữ ghế 10 phút đã bắt đầu!');
     },
     onSessionConfirmed: () => {
       refreshSessionDataRef.current();
@@ -652,7 +673,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       loadSessionTicketsRef.current();
       setPaymentStatus('PAYMENT_SUCCESS');
       setGroupOrderStatus('TICKETS_ISSUED');
-      showToast('🎉 Toàn bộ nhóm đã thanh toán thành công! Đang chuyển sang vé...');
+      showToast('Toàn bộ nhóm đã thanh toán thành công! Đang chuyển sang vé...');
       setSessionData((prev) => (prev ? { ...prev, status: 'CONFIRMED' } : prev));
       goTo('screen-ticket');
     },
@@ -661,18 +682,29 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setGroupOrderStatus('PAID');
       refreshSessionDataRef.current();
       loadPaymentSummaryRef.current();
-      showToast('🎉 Chủ nhóm đã thanh toán thành công đơn hàng!');
+      loadSessionTicketsRef.current();
+      showToast('Chủ nhóm đã thanh toán thành công đơn hàng!');
     },
     onGroupTicketsIssued: (payload) => {
-      if (payload?.tickets && Array.isArray(payload.tickets)) {
-        setIssuedTickets(payload.tickets);
-      } else {
-        loadSessionTicketsRef.current();
+      // 1. Refresh background ticket and payment data
+      loadSessionTicketsRef.current();
+      loadPaymentSummaryRef.current();
+      refreshSessionDataRef.current();
+
+      // 2. Only navigate to screen-ticket if THIS current user's ticket was actually issued!
+      const currentId = currentUser?.userId;
+      if (!currentId) return;
+
+      const myTicket = payload?.tickets && Array.isArray(payload.tickets)
+        ? payload.tickets.find((t: IssuedTicket) => t.userId === currentId || (t as unknown as { user_id?: string }).user_id === currentId)
+        : payload?.userId === currentId;
+
+      if (myTicket) {
+        setPaymentStatus('PAYMENT_SUCCESS');
+        setGroupOrderStatus('TICKETS_ISSUED');
+        showToast('Vé của bạn đã sẵn sàng!');
+        goTo('screen-ticket');
       }
-      setPaymentStatus('PAYMENT_SUCCESS');
-      setGroupOrderStatus('TICKETS_ISSUED');
-      showToast('🎟️ Vé của bạn đã sẵn sàng!');
-      goTo('screen-ticket');
     },
     onReconnected: () => {
       refreshSessionDataRef.current();
@@ -708,7 +740,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           ) {
             if (prev && freshData.members.length > prev.members.length && realtimeStatus !== 'CONNECTED') {
               const newestMember = freshData.members[freshData.members.length - 1];
-              showToast(`🎉 ${newestMember.name} vừa tham gia nhóm!`);
+              showToast(`${newestMember.name} vừa tham gia nhóm!`);
             }
             return freshData;
           }
@@ -717,6 +749,9 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         if (currentScreen === 'screen-seats') {
           loadSessionSeatsRef.current();
+        } else if (currentScreen === 'screen-ticket') {
+          loadPaymentSummaryRef.current();
+          loadSessionTicketsRef.current();
         }
         setIsBackendHealthy(true);
       } catch {
@@ -828,16 +863,25 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setInviteCode(code);
         storageService.setInviteCode(code);
 
-        // Sync showtime from joined session if present
-        if (resp.session.show_time) {
+        // Sync showtime and movie info from joined session if present
+        if (resp.session.show_time || resp.session.movie_title) {
           const syncShowTime = resp.session.show_time;
+          const sessionMovieId = resp.session.movie_id;
+          const sessionMovieTitle = resp.session.movie_title;
+          const poster = resolveMoviePoster(sessionMovieTitle, sessionMovieId);
+          const ageRating = resolveMovieAgeRating(sessionMovieTitle, sessionMovieId);
+
           setSelectedShowtime((prev) => ({
             ...prev,
             showtimeId: resp.session.showtime_id || prev.showtimeId,
-            showTime: syncShowTime,
+            showTime: syncShowTime || prev.showTime,
             showDate: resp.session.show_date || prev.showDate,
-            movieTitle: resp.session.movie_title || prev.movieTitle,
+            movieId: sessionMovieId || prev.movieId,
+            movieTitle: sessionMovieTitle || prev.movieTitle,
+            moviePoster: poster,
+            movieAgeRating: ageRating,
             cinemaName: resp.session.cinema_name || prev.cinemaName,
+            screenName: (resp.session as unknown as { screen_name?: string }).screen_name || prev.screenName,
           }));
         }
 
@@ -983,8 +1027,13 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
 
         // Find color slot for current user
-        const myIndex = sessionData?.members?.findIndex((m) => m.user_id === currentUser.userId) ?? 0;
-        const color = getMemberColor(myIndex >= 0 ? myIndex : 0);
+        const myMember = sessionData?.members?.find((m) => m.user_id === currentUser.userId);
+        const myIndex = myMember
+          ? sessionData?.members?.indexOf(myMember) ?? 0
+          : 0;
+        const color = myMember?.color_slot
+          ? getMemberColorByKey(myMember.color_slot)
+          : getMemberColor(myIndex >= 0 ? myIndex : 0);
 
         // Optimistic hold with swap
         setHeldSeats((prev) => {
@@ -1081,7 +1130,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           }
         }
       }
-      showToast(`🎮 ${targetName} đã chọn ghế: ${seats.join(', ')}`);
+      showToast(`${targetName} đã chọn ghế: ${seats.join(', ')}`);
     },
     [sessionId, sessionData, selectedShowtime, showToast]
   );
@@ -1133,7 +1182,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         m.name.toLowerCase().includes(memberName.toLowerCase())
       );
       if (!target) {
-        showToast(`⚠️ ${memberName} chưa tham gia phòng`);
+        showToast(`${memberName} chưa tham gia phòng`);
         return;
       }
 
@@ -1144,7 +1193,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           items,
         });
         setGroupFnBSummary(summary);
-        showToast(`🥤 ${target.name} đã cập nhật bắp nước!`);
+        showToast(`${target.name} đã cập nhật bắp nước!`);
       } catch (e) {
         console.warn('Simulation F&B error:', e);
       }
@@ -1170,12 +1219,13 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         });
         showToast(`✓ Bạn đã thanh toán thành công qua ${method.toUpperCase()}!`);
         await loadPaymentSummaryRef.current();
-        if (resp.data?.isConfirmed) {
-          if (resp.data?.tickets && Array.isArray(resp.data.tickets)) {
-            setIssuedTickets(resp.data.tickets);
-          }
-          goTo('screen-ticket');
+        if (resp.data?.tickets && Array.isArray(resp.data.tickets) && resp.data.tickets.length > 0) {
+          setIssuedTickets(resp.data.tickets);
+        } else {
+          await loadSessionTicketsRef.current();
         }
+        setPaymentStatus('PAYMENT_SUCCESS');
+        goTo('screen-ticket');
         return true;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Lỗi thanh toán';
@@ -1197,12 +1247,13 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         });
         showToast(`✓ Đã thanh toán thành công cho bạn bè qua ${method.toUpperCase()}!`);
         await loadPaymentSummaryRef.current();
-        if (resp.data?.isConfirmed) {
-          if (resp.data?.tickets && Array.isArray(resp.data.tickets)) {
-            setIssuedTickets(resp.data.tickets);
-          }
-          goTo('screen-ticket');
+        if (resp.data?.tickets && Array.isArray(resp.data.tickets) && resp.data.tickets.length > 0) {
+          setIssuedTickets(resp.data.tickets);
+        } else {
+          await loadSessionTicketsRef.current();
         }
+        setPaymentStatus('PAYMENT_SUCCESS');
+        goTo('screen-ticket');
         return true;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Lỗi thanh toán';
@@ -1230,14 +1281,14 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         } else {
           await loadSessionTicketsRef.current();
         }
-        showToast(`🎉 Trưởng nhóm đã thanh toán thành công toàn bộ đơn hàng!`);
+        showToast('Trưởng nhóm đã thanh toán thành công toàn bộ đơn hàng!');
         await loadPaymentSummaryRef.current();
         goTo('screen-ticket');
         return true;
       } catch (err: unknown) {
         setPaymentStatus('PAYMENT_FAILED');
         const msg = err instanceof Error ? err.message : 'Lỗi thanh toán gộp';
-        showToast(`✕ ${msg}`);
+        showToast(msg);
         return false;
       }
     },
@@ -1251,7 +1302,7 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         m.name.toLowerCase().includes(memberName.toLowerCase())
       );
       if (!target) {
-        showToast(`⚠️ ${memberName} chưa tham gia phòng`);
+        showToast(`${memberName} chưa tham gia phòng`);
         return;
       }
       try {
@@ -1259,16 +1310,18 @@ export const GroupSessionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           userId: target.user_id,
           paymentMethod: method,
         });
-        showToast(`💳 ${target.name} đã thanh toán thành công (Live API)!`);
+        showToast(`${target.name} đã thanh toán thành công (Live API)!`);
         await loadPaymentSummaryRef.current();
-        if (resp.data?.isConfirmed) {
-          goTo('screen-ticket');
+        if (resp.data?.tickets && Array.isArray(resp.data.tickets) && resp.data.tickets.length > 0) {
+          setIssuedTickets(resp.data.tickets);
+        } else {
+          await loadSessionTicketsRef.current();
         }
       } catch (e) {
         console.warn('Simulation payment error:', e);
       }
     },
-    [sessionId, sessionData, goTo, showToast]
+    [sessionId, sessionData, showToast]
   );
 
   const resetToHome = useCallback(() => {

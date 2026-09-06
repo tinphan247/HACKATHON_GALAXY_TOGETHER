@@ -9,7 +9,6 @@ export const OfflineBanner: React.FC<OfflineBannerProps> = ({ isHealthy }) => {
 
   return (
     <div className="offline-banner">
-      <span>⚠️</span>
       <span>Không thể kết nối máy chủ — Đang hoạt động ở Chế độ Demo</span>
     </div>
   );

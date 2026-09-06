@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useGroupSession } from '../context/GroupSessionContext';
 import { useToast } from '../context/ToastContext';
 import { RealQrCode } from '../components/common/RealQrCode';
+import { resolveMoviePoster, resolveMovieAgeRating } from '../utils/movieUtils';
 
 const COMBO_NAMES: Record<string, string> = {
   c1: 'Combo 1 Big Extra',
@@ -24,14 +25,27 @@ export const ETicketScreen: React.FC = () => {
     resetToHome,
     selectedShowtime,
     issuedTickets,
+    paymentSummary,
+    loadPaymentSummary,
+    loadSessionTickets,
+    isGroupMode,
   } = useGroupSession();
 
   const { showToast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
   const [selectedTicketUserId, setSelectedTicketUserId] = useState<string | null>(null);
 
-  // Active ticket determination: default to current user's ticket if in issuedTickets
+  // Keep payment status and tickets fresh on entering screen
+  useEffect(() => {
+    if (isGroupMode) {
+      loadPaymentSummary();
+      loadSessionTickets();
+    }
+  }, [isGroupMode, loadPaymentSummary, loadSessionTickets]);
+
   const currentUserId = currentUser?.userId;
+
+  // Active ticket determination: default to current user's ticket if in issuedTickets
   const activeTicket = useMemo(() => {
     if (!issuedTickets || issuedTickets.length === 0) return null;
     if (selectedTicketUserId) {
@@ -51,14 +65,21 @@ export const ETicketScreen: React.FC = () => {
     ? activeTicket.ticketCode.replace('GLX-', '')
     : (code || '').replace(/\D/g, '').padEnd(6, '5').slice(0, 6) || '138055';
 
-
-  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Quý Tử Vượt Giàu';
-  const moviePoster = selectedShowtime?.moviePoster || '/posters/poster_quytuvuotgiau.jpg';
+  const movieTitle = sessionData?.movie_title || selectedShowtime?.movieTitle || 'Chi tiết phim';
+  const moviePoster = resolveMoviePoster(
+    movieTitle,
+    sessionData?.movie_id || selectedShowtime?.movieId,
+    selectedShowtime?.moviePoster
+  );
   const cinemaName = sessionData?.cinema_name || selectedShowtime?.cinemaName || 'Galaxy Cinema Nguyễn Văn Quá';
   const screenName = sessionData?.screen_name || selectedShowtime?.screenName || 'Rạp 3';
   const showDate = sessionData?.show_date || selectedShowtime?.showDate || '07/09/2026';
   const showTime = sessionData?.show_time || selectedShowtime?.showTime || '21:00';
-  const ageRating = selectedShowtime?.movieAgeRating || 'K';
+  const ageRating = resolveMovieAgeRating(
+    movieTitle,
+    sessionData?.movie_id || selectedShowtime?.movieId,
+    selectedShowtime?.movieAgeRating
+  );
   const formatText = selectedShowtime?.format || '2D PHỤ ĐỀ';
 
   const standardPrice = selectedShowtime?.ticketPriceStandard || 55000;
@@ -106,17 +127,80 @@ export const ETicketScreen: React.FC = () => {
     .map(([id, q]) => `${q}x ${COMBO_NAMES[id] || id}`);
   const hasCombos = selectedCombos.length > 0;
 
-  // Other members in group
-  const otherMembers = displayMembers.filter(
-    (m) => m.status !== 'EMPTY' && m.userId !== currentUser?.userId
-  );
+  // Compute live payment status of all active members in group
+  const activeMembers = useMemo(() => {
+    return displayMembers.filter((m) => m.status !== 'EMPTY');
+  }, [displayMembers]);
+
+  const memberStatusList = useMemo(() => {
+    return activeMembers.map((m) => {
+      const isMe =
+        m.userId === currentUserId ||
+        Boolean(currentUser?.name && m.name && m.name.toLowerCase() === currentUser.name.toLowerCase());
+
+      // Look up server payment record
+      const summaryInfo = paymentSummary?.members?.find(
+        (p) =>
+          p.userId === m.userId ||
+          Boolean(m.name && p.memberName?.toLowerCase() === m.name.toLowerCase())
+      );
+
+      // Seats for this member
+      const memberSeatsHeld = Object.values(heldSeats)
+        .filter(
+          (s) =>
+            s.userId === m.userId ||
+            Boolean(m.name && s.memberName?.toLowerCase() === m.name.toLowerCase())
+        )
+        .map((s) => s.seatCode || s.seatId);
+
+      const seatCodes = isMe && mySeats.length > 0 ? mySeats : memberSeatsHeld;
+      const seatDesc = seatCodes.length > 0 ? seatCodes.join(', ') : '1 ghế';
+
+      // Check if ticket exists in issuedTickets
+      const memberTicket = issuedTickets.find(
+        (t) =>
+          t.userId === m.userId ||
+          Boolean(m.name && t.memberName?.toLowerCase() === m.name.toLowerCase())
+      );
+
+      const isPaid =
+        summaryInfo?.isPaid ??
+        (memberTicket ? true : m.status === 'PAID');
+
+      return {
+        member: m,
+        isMe,
+        seatDesc,
+        isPaid,
+        amount: summaryInfo?.totalAmount,
+        paymentMethod: summaryInfo?.payment?.paymentMethod,
+        hasTicket: !!memberTicket,
+      };
+    });
+  }, [activeMembers, currentUserId, currentUser, paymentSummary, heldSeats, mySeats, issuedTickets]);
+
+  const paidCount = memberStatusList.filter((m) => m.isPaid).length;
+  const totalMembersCount = Math.max(1, memberStatusList.length);
+  const isAllPaid = paidCount >= totalMembersCount;
 
   const handleExportInvoice = () => {
     setIsExporting(true);
     setTimeout(() => {
       setIsExporting(false);
-      showToast('🧾 Hoá đơn điện tử VAT đã được khởi tạo và gửi tới email của bạn!');
+      showToast('Hoá đơn điện tử VAT đã được khởi tạo và gửi tới email của bạn!');
     }, 600);
+  };
+
+  const handleNudgeMember = (memberName: string) => {
+    const inviteLink = `${window.location.origin}/join/${code}`;
+    const text = `Phòng vé Galaxy Cinema [${code}]: Mình đã thanh toán xong vé rồi! Bạn ${memberName} vào thanh toán phần mình nhé: ${inviteLink}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      showToast(`Đã sao chép lời nhắc thanh toán cho ${memberName}!`);
+    } else {
+      showToast(`Đã gửi nhắc nhở thanh toán tới ${memberName}!`);
+    }
   };
 
   return (
@@ -295,83 +379,224 @@ export const ETicketScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Collapsible Group Members Summary (if in group) */}
-        {otherMembers.length > 0 && (
-          <div style={{ margin: '0 16px 14px' }}>
-            <details
+        {/* Realtime Group Payment Status Card (When in group mode) */}
+        {isGroupMode && memberStatusList.length > 0 && (
+          <div style={{ margin: '14px 16px 12px' }}>
+            <div
               style={{
                 background: '#FFFFFF',
-                borderRadius: 12,
+                borderRadius: 16,
+                padding: '16px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                 border: '1px solid #E5E7EB',
-                padding: '12px 14px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
               }}
             >
-              <summary
+              {/* Header with Title & Progress Pill */}
+              <div
                 style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: '#374151',
-                  cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  userSelect: 'none',
+                  marginBottom: 10,
                 }}
               >
-                <span>Vé thành viên khác cùng phòng ({otherMembers.length})</span>
-                <span style={{ fontSize: 12, color: '#F97316', fontWeight: 600 }}>Chi tiết ▾</span>
-              </summary>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>
+                    Trạng thái thanh toán nhóm
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    padding: '3px 10px',
+                    borderRadius: 20,
+                    background: isAllPaid ? '#DCFCE7' : '#FFEDD5',
+                    color: isAllPaid ? '#15803D' : '#C2410C',
+                    border: isAllPaid ? '1px solid #86EFAC' : '1px solid #FDBA74',
+                  }}
+                >
+                  {paidCount}/{totalMembersCount} đã trả {isAllPaid ? '(Hoàn tất)' : ''}
+                </div>
+              </div>
+
+              {/* Visual Progress Bar */}
               <div
                 style={{
-                  marginTop: 10,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
-                  borderTop: '1px solid #F3F4F6',
-                  paddingTop: 10,
+                  width: '100%',
+                  height: 6,
+                  background: '#E5E7EB',
+                  borderRadius: 999,
+                  overflow: 'hidden',
+                  marginBottom: 10,
                 }}
               >
-                {otherMembers.map((m, idx) => {
-                  const memberHeld = Object.values(heldSeats)
-                    .filter(
-                      (s) =>
-                        s.userId === m.userId ||
-                        (m.name && s.memberName?.toLowerCase() === m.name.toLowerCase())
-                    )
-                    .map((s) => s.seatCode || s.seatId);
+                <div
+                  style={{
+                    width: `${Math.min(100, Math.round((paidCount / totalMembersCount) * 100))}%`,
+                    height: '100%',
+                    background: isAllPaid
+                      ? '#16A34A'
+                      : 'linear-gradient(90deg, #F97316 0%, #16A34A 100%)',
+                    borderRadius: 999,
+                    transition: 'width 0.4s ease',
+                  }}
+                />
+              </div>
 
-                  const seatDesc = memberHeld.length > 0 ? memberHeld.join(', ') : '1 ghế';
+              {/* Status Note Banner */}
+              <div
+                style={{
+                  padding: '9px 12px',
+                  borderRadius: 10,
+                  fontSize: 11.5,
+                  lineHeight: 1.45,
+                  marginBottom: 14,
+                  background: isAllPaid ? '#F0FDF4' : '#FFFBEB',
+                  color: isAllPaid ? '#166534' : '#92400E',
+                  border: isAllPaid ? '1px solid #BBF7D0' : '1px solid #FDE68A',
+                }}
+              >
+                {isAllPaid
+                  ? 'Toàn bộ nhóm đã thanh toán hoàn tất! Chúc các bạn có buổi xem phim vui vẻ!'
+                  : 'Bạn đã có vé QR của mình để vào rạp. Hệ thống đang giữ ghế cho cả nhóm và chờ các bạn còn lại hoàn tất.'}
+              </div>
 
+              {/* Member Rows List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {memberStatusList.map((item, idx) => {
+                  const m = item.member;
                   return (
                     <div
-                      key={m.slot || idx}
+                      key={m.userId || idx}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        fontSize: 12.5,
+                        padding: '8px 10px',
+                        background: item.isMe ? '#F9FAFB' : '#FFFFFF',
+                        borderRadius: 10,
+                        border: item.isMe ? '1px solid #E5E7EB' : '1px solid #F3F4F6',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span
+                      {/* Member Info */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                        <div
                           style={{
-                            width: 8,
-                            height: 8,
+                            width: 28,
+                            height: 28,
                             borderRadius: '50%',
                             background: m.colorHex || '#F97316',
-                            display: 'inline-block',
+                            color: '#FFFFFF',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textTransform: 'uppercase',
                           }}
-                        />
-                        <span style={{ fontWeight: 600, color: '#1F2937' }}>{m.name}</span>
-                        <span style={{ color: '#6B7280' }}>({seatDesc})</span>
+                        >
+                          {(m.name || 'M').charAt(0)}
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#1F2937' }}>
+                              {m.name}
+                            </span>
+                            {item.isMe && (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  color: '#F97316',
+                                  background: '#FFF7ED',
+                                  padding: '1px 5px',
+                                  borderRadius: 6,
+                                  border: '1px solid #FFEDD5',
+                                }}
+                              >
+                                Bạn
+                              </span>
+                            )}
+                            {m.isHost && (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  color: '#B45309',
+                                  background: '#FEF3C7',
+                                  padding: '1px 5px',
+                                  borderRadius: 6,
+                                }}
+                              >
+                                Trưởng nhóm
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#6B7280', marginTop: 1 }}>
+                            Ghế: <strong style={{ color: '#374151' }}>{item.seatDesc}</strong>
+                          </div>
+                        </div>
                       </div>
-                      <span style={{ color: '#16A34A', fontWeight: 600 }}>✓ Đã thanh toán</span>
+
+                      {/* Payment Status Badge & Nudge Button */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {item.isPaid ? (
+                          <span
+                            style={{
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              color: '#15803D',
+                              background: '#DCFCE7',
+                              border: '1px solid #86EFAC',
+                              padding: '4px 9px',
+                              borderRadius: 14,
+                              display: 'inline-block',
+                            }}
+                          >
+                            Đã thanh toán
+                          </span>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <span
+                              style={{
+                                fontSize: 11.5,
+                                fontWeight: 600,
+                                color: '#C2410C',
+                                background: '#FFEDD5',
+                                border: '1px solid #FDBA74',
+                                padding: '4px 9px',
+                                borderRadius: 14,
+                                display: 'inline-block',
+                              }}
+                            >
+                              Chờ thanh toán
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleNudgeMember(m.name || 'bạn')}
+                              style={{
+                                background: '#FFFFFF',
+                                border: '1px solid #D1D5DB',
+                                borderRadius: 12,
+                                padding: '4px 8px',
+                                fontSize: 10.5,
+                                fontWeight: 600,
+                                color: '#4B5563',
+                                cursor: 'pointer',
+                              }}
+                              title="Gửi link nhắc bạn thanh toán"
+                            >
+                              Nhắc bạn
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
               </div>
-            </details>
+            </div>
           </div>
         )}
       </div>

@@ -1108,10 +1108,12 @@ export class SessionService {
       if (existingPayRes.rows.length > 0) {
         await client.query('COMMIT');
         const summary = await this.calculateSessionPaymentSummary(sessionId);
+        const existingTickets = await this.getSessionTickets(sessionId);
         return {
           success: true,
           isNew: false,
           payment: existingPayRes.rows[0],
+          tickets: existingTickets,
           isAllPaid: summary.isAllPaid,
           isConfirmed: summary.isConfirmed,
           summary,
@@ -1143,45 +1145,57 @@ export class SessionService {
         [subOrderId, sessionId, member.id]
       );
 
-      // 8. Check if all members are now PAID
+      // 8. Mark this member's held seats as sold immediately
+      await client.query(
+        "UPDATE seat_holds SET status = 'sold' WHERE group_session_id = $1 AND group_member_id = $2 AND status = 'held'",
+        [sessionId, member.id]
+      );
+
+      // 9. Ensure group_bookings entry exists and update total
+      let bRes = await client.query('SELECT id FROM group_bookings WHERE group_session_id = $1', [sessionId]);
+      let bookingId;
+      if (bRes.rows.length === 0) {
+        bookingId = crypto.randomUUID();
+        await client.query(
+          `INSERT INTO group_bookings (id, group_session_id, total_amount, status)
+           VALUES ($1, $2, $3, 'confirmed')`,
+          [bookingId, sessionId, memberTotal]
+        );
+      } else {
+        bookingId = bRes.rows[0].id;
+        await client.query(
+          `UPDATE group_bookings SET total_amount = total_amount + $1, status = 'confirmed' WHERE id = $2`,
+          [memberTotal, bookingId]
+        );
+      }
+
+      // 10. Issue tickets immediately for this paid member!
+      await this.issueTicketsForMember(client, sessionId, member.id, bookingId);
+
+      // 11. Check if all members are now PAID
       const unpaidCountRes = await client.query(
         "SELECT count(*) FROM group_members WHERE group_session_id = $1 AND status NOT IN ('PAID', 'CONFIRMED') AND status != 'LEFT'",
         [sessionId]
       );
       const unpaidCount = parseInt(unpaidCountRes.rows[0].count, 10);
       const isAllPaid = unpaidCount === 0;
-      let tickets = [];
       if (isAllPaid) {
         // Confirm entire session
         await client.query(
           "UPDATE group_sessions SET status = 'CONFIRMED', updated_at = NOW() WHERE id = $1",
           [sessionId]
         );
-        // Mark all held seats as sold
+        // Mark any remaining held seats as sold
         await client.query(
           "UPDATE seat_holds SET status = 'sold' WHERE group_session_id = $1 AND status = 'held'",
           [sessionId]
         );
-        // Create or update group_bookings
-        const totalSessionRes = await client.query(
-          "SELECT sum(amount) as total FROM payments WHERE group_session_id = $1 AND status = 'success'",
-          [sessionId]
-        );
-        const bookingTotal = Number(totalSessionRes.rows[0].total || memberTotal);
-        const bookingId = crypto.randomUUID();
-        await client.query(
-          `INSERT INTO group_bookings (id, group_session_id, total_amount, status)
-           VALUES ($1, $2, $3, 'confirmed')
-           ON CONFLICT (group_session_id) DO UPDATE SET total_amount = $3, status = 'confirmed'`,
-          [bookingId, sessionId, bookingTotal]
-        );
-        // 9. Issue tickets for all members
-        tickets = await this.issueTicketsForSession(client, sessionId, bookingId);
       }
 
       await client.query('COMMIT');
 
       const summary = await this.calculateSessionPaymentSummary(sessionId);
+      const allSessionTickets = await this.getSessionTickets(sessionId);
 
       return {
         success: true,
@@ -1197,7 +1211,7 @@ export class SessionService {
         memberName: member.name,
         userId,
         payerUserId: payerUserId || userId,
-        tickets: tickets || [],
+        tickets: allSessionTickets || [],
         isAllPaid: summary.isAllPaid,
         isConfirmed: summary.isConfirmed,
         summary,
@@ -1327,6 +1341,74 @@ export class SessionService {
   }
 
   /**
+   * Helper to issue individual tickets in database for a specific member's sold seats
+   */
+  static async issueTicketsForMember(client, sessionId, memberId, bookingId) {
+    const seatsRes = await client.query(
+      `SELECT sh.id as seat_hold_id, sh.group_member_id, sh.seat_id, sh.seat_code, sh.seat_type, sh.price,
+              gm.user_id, gm.name as member_name, gm.color_slot
+       FROM seat_holds sh
+       JOIN group_members gm ON sh.group_member_id = gm.id
+       WHERE sh.group_session_id = $1 AND sh.group_member_id = $2 AND sh.status = 'sold'`,
+      [sessionId, memberId]
+    );
+
+    const issuedTickets = [];
+
+    for (const row of seatsRes.rows) {
+      let bookingItemId;
+      const existingItemRes = await client.query(
+        `SELECT id FROM booking_items WHERE group_booking_id = $1 AND seat_id = $2`,
+        [bookingId, row.seat_id]
+      );
+
+      if (existingItemRes.rows.length > 0) {
+        bookingItemId = existingItemRes.rows[0].id;
+      } else {
+        bookingItemId = crypto.randomUUID();
+        await client.query(
+          `INSERT INTO booking_items (id, group_booking_id, group_member_id, seat_id, seat_code, price)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (id) DO NOTHING`,
+          [bookingItemId, bookingId, row.group_member_id, row.seat_id, row.seat_code, row.price]
+        );
+      }
+
+      const ticketId = crypto.randomUUID();
+      const randomNum = Math.floor(100000 + Math.random() * 900000);
+      const ticketCode = `GLX-${randomNum}`;
+      const qrPayload = `GLX-TICKET:${sessionId}:${(row.member_name || 'MEMBER').toUpperCase()}:${row.seat_code}:${ticketCode}`;
+
+      const tRes = await client.query(
+        `INSERT INTO tickets (id, booking_item_id, group_member_id, ticket_code, qr_payload, status)
+         VALUES ($1, $2, $3, $4, $5, 'valid')
+         ON CONFLICT (booking_item_id) DO UPDATE SET ticket_code = tickets.ticket_code
+         RETURNING id, ticket_code, qr_payload, status, created_at`,
+        [ticketId, bookingItemId, row.group_member_id, ticketCode, qrPayload]
+      );
+
+      const tRow = tRes.rows[0];
+      issuedTickets.push({
+        id: tRow.id,
+        ticketCode: tRow.ticket_code,
+        qrPayload: tRow.qr_payload,
+        memberId: row.group_member_id,
+        userId: row.user_id,
+        memberName: row.member_name,
+        colorSlot: row.color_slot,
+        seatId: row.seat_id,
+        seatCode: row.seat_code,
+        seatType: row.seat_type,
+        price: Number(row.price),
+        status: tRow.status,
+        createdAt: tRow.created_at,
+      });
+    }
+
+    return issuedTickets;
+  }
+
+  /**
    * Helper to issue individual tickets in database for all sold seats in session
    */
   static async issueTicketsForSession(client, sessionId, bookingId) {
@@ -1342,13 +1424,21 @@ export class SessionService {
     const issuedTickets = [];
 
     for (const row of seatsRes.rows) {
-      const bookingItemId = crypto.randomUUID();
-      await client.query(
-        `INSERT INTO booking_items (id, group_booking_id, group_member_id, seat_id, seat_code, price)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (id) DO NOTHING`,
-        [bookingItemId, bookingId, row.group_member_id, row.seat_id, row.seat_code, row.price]
+      let bookingItemId;
+      const existingItemRes = await client.query(
+        `SELECT id FROM booking_items WHERE group_booking_id = $1 AND seat_id = $2`,
+        [bookingId, row.seat_id]
       );
+      if (existingItemRes.rows.length > 0) {
+        bookingItemId = existingItemRes.rows[0].id;
+      } else {
+        bookingItemId = crypto.randomUUID();
+        await client.query(
+          `INSERT INTO booking_items (id, group_booking_id, group_member_id, seat_id, seat_code, price)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [bookingItemId, bookingId, row.group_member_id, row.seat_id, row.seat_code, row.price]
+        );
+      }
 
       const ticketId = crypto.randomUUID();
       const randomNum = Math.floor(100000 + Math.random() * 900000);

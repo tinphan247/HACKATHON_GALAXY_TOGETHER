@@ -22,7 +22,7 @@ export const InviteScreen: React.FC = () => {
   const handleCopyCode = async () => {
     try {
       await navigator.clipboard.writeText(code);
-      showToast('✓ Đã sao chép mã nhóm: ' + code);
+      showToast('Đã sao chép mã nhóm: ' + code);
     } catch {
       showToast('Mã nhóm: ' + code);
     }
@@ -31,7 +31,7 @@ export const InviteScreen: React.FC = () => {
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(joinUrl);
-      showToast('✓ Đã sao chép liên kết tham gia!');
+      showToast('Đã sao chép liên kết tham gia!');
     } catch {
       showToast('Đã lưu liên kết: ' + joinUrl);
     }
@@ -64,7 +64,6 @@ export const InviteScreen: React.FC = () => {
       <div className="body">
         {/* Created Banner */}
         <div style={{ textAlign: 'center', padding: '20px 16px 16px' }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>🎉</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
             Nhóm đã được tạo!
           </div>
@@ -108,9 +107,9 @@ export const InviteScreen: React.FC = () => {
 
         {/* Copy / Share Actions */}
         <div className="copy-row">
-          <button onClick={handleCopyLink}>🔗 Sao chép link</button>
+          <button onClick={handleCopyLink}>Sao chép link</button>
           <button className="filled" onClick={handleNativeShare}>
-            ↗ Chia sẻ
+            Chia sẻ
           </button>
         </div>
 

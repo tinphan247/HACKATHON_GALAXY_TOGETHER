@@ -11,7 +11,6 @@ export const GalaxyTogetherBanner: React.FC<GalaxyTogetherBannerProps> = ({
     <section className="together-promo-card" onClick={onActionClick}>
       <div className="together-promo-content">
         <div className="together-tag-row">
-          <span className="together-icon">🎬</span>
           <span className="together-tag-title">GALAXY TOGETHER</span>
           <span className="together-new-pill">MỚI</span>
         </div>
@@ -38,9 +37,7 @@ export const GalaxyTogetherBanner: React.FC<GalaxyTogetherBannerProps> = ({
 
       <div className="together-visual-decor" aria-hidden="true">
         <div className="decor-circle-outer">
-          <div className="decor-circle-inner">
-            <span className="decor-emoji">🍿</span>
-          </div>
+          <div className="decor-circle-inner" />
         </div>
       </div>
     </section>

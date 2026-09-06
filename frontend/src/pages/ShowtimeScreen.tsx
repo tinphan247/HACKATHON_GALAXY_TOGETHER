@@ -237,7 +237,7 @@ export const ShowtimeScreen: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {theater.distanceKm && (
-                      <span className="cinema-km">📍 {theater.distanceKm} km</span>
+                      <span className="cinema-km">{theater.distanceKm} km</span>
                     )}
                     <span>{isOpen ? '^' : 'v'}</span>
                   </div>

@@ -270,9 +270,18 @@ router.post('/:id/payments/member', async (req, res, next) => {
       isAllPaid: result.isAllPaid,
       isConfirmed: result.isConfirmed,
       summary: result.summary,
+      tickets: result.tickets,
     });
 
-    // If whole session is confirmed, broadcast SESSION_CONFIRMED, GROUP_PAYMENT_SUCCESS, and GROUP_TICKETS_ISSUED
+    // Broadcast tickets whenever any tickets are issued so all connected members see updated tickets
+    if (result.tickets && result.tickets.length > 0) {
+      realtimeGateway.broadcast(req.params.id, 'GROUP_TICKETS_ISSUED', {
+        groupSessionId: req.params.id,
+        tickets: result.tickets,
+      });
+    }
+
+    // If whole session is confirmed, broadcast SESSION_CONFIRMED and GROUP_PAYMENT_SUCCESS
     if (result.isConfirmed) {
       realtimeGateway.broadcast(req.params.id, 'SESSION_CONFIRMED', {
         sessionId: req.params.id,
@@ -288,13 +297,6 @@ router.post('/:id/payments/member', async (req, res, next) => {
         totalAmount: result.summary?.totalSessionAmount,
         timestamp: new Date().toISOString(),
       });
-
-      if (result.tickets && result.tickets.length > 0) {
-        realtimeGateway.broadcast(req.params.id, 'GROUP_TICKETS_ISSUED', {
-          groupSessionId: req.params.id,
-          tickets: result.tickets,
-        });
-      }
     }
 
     res.json({
